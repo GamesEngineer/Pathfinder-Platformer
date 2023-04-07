@@ -15,6 +15,12 @@ namespace GameU
         [SerializeField, Range(0f, 10f), Tooltip("Maximum speed when running")]
         float runSpeed = 4f;
 
+        [SerializeField, Range(1f, 5f)]
+        float dashSpeedMultiplier = 3f;
+
+        [SerializeField, Range(0f, 1f)]
+        float dashDuration = 0.25f;
+
         [SerializeField, Range(0f, 3f), Tooltip("Maximum jump height when doing a normal jump action")]
         float normalJumpHeight = 1f;
 
@@ -30,11 +36,11 @@ namespace GameU
         private PlayerControls controls;
         private CharacterController body;
         private Vector2 input_move;
-        private bool input_jump;
         private Vector3 velocity;
         private bool jumpRequested;
         private CollisionFlags collisionFlags;
         private Camera cam;
+        private float dashRemaining = -1f;
 
         private void Awake()
         {
@@ -47,7 +53,9 @@ namespace GameU
         {
             cam = Camera.main;
             Cursor.lockState = CursorLockMode.Locked;
-            //Cursor.visible = false;
+            print($"FPS {Screen.currentResolution.refreshRate}");
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = Screen.currentResolution.refreshRate;
         }
 
         private void OnEnable()
@@ -80,28 +88,29 @@ namespace GameU
         /// <param name="context"></param>
         public void OnJump(InputAction.CallbackContext context)
         {
-            input_jump = context.ReadValueAsButton();
-            //print($"JUMP {input_jump}");
-            jumpRequested |= input_jump;
+            if (context.ReadValueAsButton() && body.isGrounded)
+            {
+                print($"JUMP {normalJumpHeight}");
+                jumpRequested = true;
+            }
         }
 
         public void OnLook(InputAction.CallbackContext context)
         {
-            // TODO
         }
 
         public void OnDash(InputAction.CallbackContext context)
         {
-            // TODO
-            if (context.started)
+            if (context.ReadValueAsButton() && dashRemaining < 0f)
             {
-                computeGroundNormal = !computeGroundNormal;
+                print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s");
+                dashRemaining = dashDuration;
             }
         }
 
         public bool computeGroundNormal;
 
-        private void Update()
+        private void FixedUpdate()
         {
             // Movement is relative to the camera and parallel to the ground
             Vector3 localVelocity = (input_move * runSpeed).ToVector3();
@@ -112,42 +121,70 @@ namespace GameU
                 groundNormal = hitInfo.normal;
             }
             Quaternion localToWorld = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
-
-            Debug.DrawRay(transform.position, velocity * 2f, Color.yellow);
+            Vector3 desiredGroundVelocity = localToWorld * localVelocity;
+            Debug.DrawRay(transform.position, desiredGroundVelocity * 2f, Color.yellow);
             Debug.DrawRay(transform.position, groundNormal * 5f, body.isGrounded ? Color.cyan : Color.blue);
 
             if (body.isGrounded)
             {
-                velocity = localToWorld * localVelocity;
-                if (jumpRequested)
-                {
-                    velocity.y += Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-                }
+                velocity = desiredGroundVelocity;                
             }
+
+            UpdateDash();
 
             // CHALLENGE! Allow some lateral movement when in air, but preserve momentum
 
-            if (!jumpRequested)
+            if (jumpRequested)
+            {
+                velocity.y += Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+                jumpRequested = false;
+            }
+            else
             {
                 velocity.y += Physics.gravity.y * Time.deltaTime;
             }
 
-            TurnTowardsMovementDirection();
+            TurnTowards(desiredGroundVelocity);
             collisionFlags = body.Move(velocity * Time.deltaTime);
-            jumpRequested = false;
         }
 
-        private void TurnTowardsMovementDirection()
+        private void UpdateDash()
         {
-            Vector2 direction = new(velocity.x, velocity.z);
-            if (direction.sqrMagnitude > 0f)
+            if (dashRemaining > 0f)
             {
-                direction.Normalize();
-                float targetYaw = Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
+                Vector2 dir = transform.forward.ToVector2().normalized;
+                velocity.x = dir.x * runSpeed * dashSpeedMultiplier;
+                velocity.z = dir.y * runSpeed * dashSpeedMultiplier;
+                dashRemaining = Mathf.MoveTowards(dashRemaining, 0f, Time.deltaTime);
+            }            
+
+            if (dashRemaining == 0f)
+            {
+                Vector2 dir = velocity.ToVector2().normalized;
+                velocity.x = dir.x * runSpeed;
+                velocity.z = dir.y * runSpeed;
+                dashRemaining = -1f;
+            }
+        }
+
+        private void TurnTowards(Vector3 direction)
+        {
+            Vector2 direction2D = direction.ToVector2();
+            if (direction2D.sqrMagnitude > 0f)
+            {
+                direction2D.Normalize();
+                float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
                 Vector3 pitchYawRoll = transform.eulerAngles;
-                pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnSpeed * Time.deltaTime);
+                float turnDelta = turnSpeed * Time.deltaTime;
+                if (!body.isGrounded) turnDelta /= 2f;
+                pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
                 transform.eulerAngles = pitchYawRoll;
             }
+        }
+
+        public void OnExit(InputAction.CallbackContext context)
+        {
+            Application.Quit();
         }
     }
 }

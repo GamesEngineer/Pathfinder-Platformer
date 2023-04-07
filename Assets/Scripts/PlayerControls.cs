@@ -64,6 +64,15 @@ namespace GameU
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""exit"",
+                    ""type"": ""Button"",
+                    ""id"": ""2b88ea2c-b2af-4e8f-87ca-e3d13b637066"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -168,6 +177,17 @@ namespace GameU
                 },
                 {
                     ""name"": """",
+                    ""id"": ""6e778cd5-f80b-4838-a6ea-f1b27ea9330f"",
+                    ""path"": ""<Mouse>/delta"",
+                    ""interactions"": """",
+                    ""processors"": ""ScaleVector2(x=0.02,y=0.02)"",
+                    ""groups"": ""DefaultControls"",
+                    ""action"": ""look"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""3c57c951-e5a9-431b-8d6b-298fa16a8656"",
                     ""path"": ""<Keyboard>/q"",
                     ""interactions"": """",
@@ -185,6 +205,17 @@ namespace GameU
                     ""processors"": """",
                     ""groups"": ""DefaultControls"",
                     ""action"": ""dash"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""6fa63e40-b95e-4068-9a3c-b0ebbb78867e"",
+                    ""path"": ""<Keyboard>/escape"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""DefaultControls"",
+                    ""action"": ""exit"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -205,6 +236,7 @@ namespace GameU
             m_gameplay_jump = m_gameplay.FindAction("jump", throwIfNotFound: true);
             m_gameplay_look = m_gameplay.FindAction("look", throwIfNotFound: true);
             m_gameplay_dash = m_gameplay.FindAction("dash", throwIfNotFound: true);
+            m_gameplay_exit = m_gameplay.FindAction("exit", throwIfNotFound: true);
         }
 
         public void Dispose()
@@ -270,6 +302,7 @@ namespace GameU
         private readonly InputAction m_gameplay_jump;
         private readonly InputAction m_gameplay_look;
         private readonly InputAction m_gameplay_dash;
+        private readonly InputAction m_gameplay_exit;
         public struct GameplayActions
         {
             private @PlayerControls m_Wrapper;
@@ -278,6 +311,7 @@ namespace GameU
             public InputAction @jump => m_Wrapper.m_gameplay_jump;
             public InputAction @look => m_Wrapper.m_gameplay_look;
             public InputAction @dash => m_Wrapper.m_gameplay_dash;
+            public InputAction @exit => m_Wrapper.m_gameplay_exit;
             public InputActionMap Get() { return m_Wrapper.m_gameplay; }
             public void Enable() { Get().Enable(); }
             public void Disable() { Get().Disable(); }
@@ -299,6 +333,9 @@ namespace GameU
                 @dash.started += instance.OnDash;
                 @dash.performed += instance.OnDash;
                 @dash.canceled += instance.OnDash;
+                @exit.started += instance.OnExit;
+                @exit.performed += instance.OnExit;
+                @exit.canceled += instance.OnExit;
             }
 
             private void UnregisterCallbacks(IGameplayActions instance)
@@ -315,6 +352,9 @@ namespace GameU
                 @dash.started -= instance.OnDash;
                 @dash.performed -= instance.OnDash;
                 @dash.canceled -= instance.OnDash;
+                @exit.started -= instance.OnExit;
+                @exit.performed -= instance.OnExit;
+                @exit.canceled -= instance.OnExit;
             }
 
             public void RemoveCallbacks(IGameplayActions instance)
@@ -347,6 +387,7 @@ namespace GameU
             void OnJump(InputAction.CallbackContext context);
             void OnLook(InputAction.CallbackContext context);
             void OnDash(InputAction.CallbackContext context);
+            void OnExit(InputAction.CallbackContext context);
         }
     }
 }

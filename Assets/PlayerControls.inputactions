@@ -40,6 +40,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": true
+                },
+                {
+                    "name": "exit",
+                    "type": "Button",
+                    "id": "2b88ea2c-b2af-4e8f-87ca-e3d13b637066",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -144,6 +153,17 @@
                 },
                 {
                     "name": "",
+                    "id": "6e778cd5-f80b-4838-a6ea-f1b27ea9330f",
+                    "path": "<Mouse>/delta",
+                    "interactions": "",
+                    "processors": "ScaleVector2(x=0.02,y=0.02)",
+                    "groups": "DefaultControls",
+                    "action": "look",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
                     "id": "3c57c951-e5a9-431b-8d6b-298fa16a8656",
                     "path": "<Keyboard>/q",
                     "interactions": "",
@@ -161,6 +181,17 @@
                     "processors": "",
                     "groups": "DefaultControls",
                     "action": "dash",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "6fa63e40-b95e-4068-9a3c-b0ebbb78867e",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "DefaultControls",
+                    "action": "exit",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

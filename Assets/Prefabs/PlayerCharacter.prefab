@@ -69,6 +69,9 @@ MonoBehaviour:
   runSpeed: 4
   dashSpeedMultiplier: 4
   dashDuration: 0.25
+  dashCooldown: 0.1
+  staminaPerDash: 0.2
+  staminaRecoveryRate: 0.1
   normalJumpHeight: 1
   turnSpeed: 360
   groundLayers:

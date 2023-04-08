@@ -3,12 +3,6 @@ using UnityEngine.InputSystem;
 
 namespace GameU
 {
-    static class Extensions
-    {
-        public static Vector3 ToVector3(this Vector2 v, float y = 0f) => new(v.x, y, v.y);
-        public static Vector2 ToVector2(this Vector3 v) => new(v.x, v.z);
-    }
-
     [SelectionBase, RequireComponent(typeof(CharacterController))]
     public class Player : MonoBehaviour, PlayerControls.IGameplayActions
     {
@@ -20,6 +14,18 @@ namespace GameU
 
         [SerializeField, Range(0f, 1f)]
         float dashDuration = 0.25f;
+
+        //[SerializeField, Range(0f, 1f), Tooltip("Amount of the dash in which the player is invincible to damage.")]
+        //float dashInvicibility = 0.5f;
+
+        [SerializeField, Range(0f, 1f)]
+        float dashCooldown = 0.1f;
+
+        [SerializeField, Range(0f, 1f)]
+        float staminaPerDash = 0.2f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("Stamina per second")]
+        float staminaRecoveryRate = 0.1f;
 
         [SerializeField, Range(0f, 3f), Tooltip("Maximum jump height when doing a normal jump action")]
         float normalJumpHeight = 1f;
@@ -33,6 +39,8 @@ namespace GameU
         [SerializeField]
         LayerMask groundLayers;
 
+        public float Stamina { get; private set; } = 1f;
+
         private PlayerControls controls;
         private CharacterController body;
         private Vector2 input_move;
@@ -40,13 +48,21 @@ namespace GameU
         private bool jumpRequested;
         private CollisionFlags collisionFlags;
         private Camera cam;
-        private float dashRemaining = -1f;
+        private Countdown dash;
 
         private void Awake()
         {
             body = GetComponent<CharacterController>();
             body.minMoveDistance = 0f; // force this to zero to ensure movement with small deltaTime (i.e., during high frame rate)
             controls = new PlayerControls();
+            dash = new Countdown(dashDuration, dashCooldown);
+            //dash.OnElapsed += Dash_OnElapsed;
+        }
+
+        private void Dash_OnElapsed()
+        {
+            velocity.x = 0f;
+            velocity.z = 0f;
         }
 
         private void Start()
@@ -101,12 +117,17 @@ namespace GameU
 
         public void OnDash(InputAction.CallbackContext context)
         {
-            if (context.ReadValueAsButton() && dashRemaining < 0f)
+            if (context.ReadValueAsButton() && IsDashReady)
             {
-                print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s");
-                dashRemaining = dashDuration;
+                dash.Reset();
+                Stamina = Mathf.MoveTowards(Stamina, 0f, staminaPerDash);
+                print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s with {Stamina:0.00} stamina remaining");
             }
         }
+
+        public bool IsDashReady => dash.State == Countdown.Phase.Ready && Stamina >= staminaPerDash;
+        public bool IsDashActive => dash.State == Countdown.Phase.Active;
+        public bool IsDashInCooldown => dash.State == Countdown.Phase.Cooling;
 
         public bool computeGroundNormal;
 
@@ -127,10 +148,11 @@ namespace GameU
 
             if (body.isGrounded)
             {
-                velocity = desiredGroundVelocity;                
+                velocity = desiredGroundVelocity;
             }
 
             UpdateDash();
+            UpdateStamina();
 
             // CHALLENGE! Allow some lateral movement when in air, but preserve momentum
 
@@ -150,21 +172,32 @@ namespace GameU
 
         private void UpdateDash()
         {
-            if (dashRemaining > 0f)
+            if (IsDashActive)
             {
                 Vector2 dir = transform.forward.ToVector2().normalized;
-                velocity.x = dir.x * runSpeed * dashSpeedMultiplier;
-                velocity.z = dir.y * runSpeed * dashSpeedMultiplier;
-                dashRemaining = Mathf.MoveTowards(dashRemaining, 0f, Time.deltaTime);
-            }            
-
-            if (dashRemaining == 0f)
-            {
-                Vector2 dir = velocity.ToVector2().normalized;
-                velocity.x = dir.x * runSpeed;
-                velocity.z = dir.y * runSpeed;
-                dashRemaining = -1f;
+                float dashSpeed = runSpeed * dashSpeedMultiplier;
+                velocity.x = dir.x * dashSpeed;
+                velocity.z = dir.y * dashSpeed;
             }
+            else
+            {
+                float speed = velocity.ToVector2().magnitude;
+                if (speed > runSpeed)
+                {
+                    // Blend back down to run speed
+                    float newSpeed = Mathf.MoveTowards(speed, runSpeed, Time.deltaTime * 30f);
+                    float ratio = newSpeed / speed;
+                    velocity.x *= ratio;
+                    velocity.z *= ratio;
+                }
+
+            }
+            dash.Update(Time.deltaTime);
+        }
+
+        private void UpdateStamina()
+        {
+            Stamina = Mathf.MoveTowards(Stamina, 1f, staminaRecoveryRate * Time.deltaTime);
         }
 
         private void TurnTowards(Vector3 direction)

@@ -1698,8 +1698,9 @@ GameObject:
   - component: {fileID: 615810322}
   - component: {fileID: 615810321}
   - component: {fileID: 615810320}
+  - component: {fileID: 615810324}
   m_Layer: 0
-  m_Name: Cube (3)
+  m_Name: Elevator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1783,6 +1784,22 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 15
   m_LocalEulerAnglesHint: {x: 0, y: 45, z: 0}
+--- !u!111 &615810324
+Animation:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 615810319}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Animation: {fileID: 7400000, guid: 55bc06c7d2db20f418a0cee6499dddf3, type: 2}
+  m_Animations:
+  - {fileID: 7400000, guid: 55bc06c7d2db20f418a0cee6499dddf3, type: 2}
+  m_WrapMode: 0
+  m_PlayAutomatically: 1
+  m_AnimatePhysics: 1
+  m_CullingType: 0
 --- !u!1 &685631473
 GameObject:
   m_ObjectHideFlags: 0

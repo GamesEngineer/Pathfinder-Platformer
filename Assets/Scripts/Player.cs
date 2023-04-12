@@ -23,7 +23,7 @@ namespace GameU
 
         [SerializeField, Range(0f, 1f)]
         float staminaPerDash = 0.2f;
-
+        
         [SerializeField, Range(0f, 1f), Tooltip("Stamina per second")]
         float staminaRecoveryRate = 0.1f;
 
@@ -39,16 +39,33 @@ namespace GameU
         [SerializeField]
         LayerMask groundLayers;
 
+        [SerializeField, Range(1f, 50f)]
+        float gravityScalarWhenOnGround = 30f;
+
+        [SerializeField, Range(0f, 50f)]
+        float inAirAcceleration = 15f;
+
+        [SerializeField]
+        bool computeGroundNormal;
+
+        public GameObject groundedMarker; // HACK to see state of isGrounded
+
         public float Stamina { get; private set; } = 1f;
+        public bool IsGrounded { get; private set; }
+        public bool IsDashReady => dash.State == Countdown.Phase.Ready && Stamina >= staminaPerDash;
+        public bool IsDashActive => dash.State == Countdown.Phase.Active;
+        public bool IsDashInCooldown => dash.State == Countdown.Phase.Cooling;
 
         private PlayerControls controls;
         private CharacterController body;
         private Vector2 input_move;
         private Vector3 velocity;
         private bool jumpRequested;
+        private bool secondJumpEnabled;
         private CollisionFlags collisionFlags;
         private Camera cam;
         private Countdown dash;
+        private float jumpCooldown;
 
         private void Awake()
         {
@@ -104,10 +121,10 @@ namespace GameU
         /// <param name="context"></param>
         public void OnJump(InputAction.CallbackContext context)
         {
-            if (context.ReadValueAsButton() && body.isGrounded)
+            if (context.ReadValueAsButton() && !jumpRequested)
             {
-                print($"JUMP {normalJumpHeight}");
-                jumpRequested = true;
+                //print($"JUMP {normalJumpHeight}");
+                jumpRequested = body.isGrounded || secondJumpEnabled;
             }
         }
 
@@ -121,53 +138,86 @@ namespace GameU
             {
                 dash.Reset();
                 Stamina = Mathf.MoveTowards(Stamina, 0f, staminaPerDash);
-                print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s with {Stamina:0.00} stamina remaining");
+                //print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s with {Stamina:0.00} stamina remaining");
             }
         }
 
-        public bool IsDashReady => dash.State == Countdown.Phase.Ready && Stamina >= staminaPerDash;
-        public bool IsDashActive => dash.State == Countdown.Phase.Active;
-        public bool IsDashInCooldown => dash.State == Countdown.Phase.Cooling;
-
-        public bool computeGroundNormal;
-
-        private void FixedUpdate()
+        private void Update()
         {
-            // Movement is relative to the camera and parallel to the ground
-            Vector3 localVelocity = (input_move * runSpeed).ToVector3();
-            Vector2 camForward = cam.transform.forward.ToVector2().normalized;
-            Vector3 groundNormal = Vector3.up;
-            if (computeGroundNormal && Physics.SphereCast(transform.position + Vector3.up * body.radius, body.radius, Vector3.down, out RaycastHit hitInfo, maxDistance: 0f, groundLayers, QueryTriggerInteraction.Ignore))
-            {
-                groundNormal = hitInfo.normal;
-            }
-            Quaternion localToWorld = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
-            Vector3 desiredGroundVelocity = localToWorld * localVelocity;
-            Debug.DrawRay(transform.position, desiredGroundVelocity * 2f, Color.yellow);
-            Debug.DrawRay(transform.position, groundNormal * 5f, body.isGrounded ? Color.cyan : Color.blue);
+            IsGrounded = body.isGrounded;
 
-            if (body.isGrounded)
+            // Movement is relative to the camera and parallel to the ground
+            Vector2 camForward = cam.transform.forward.ToVector2().normalized;
+            Vector3 groundNormal = ComputeGroundNormal();
+            Quaternion localToGround = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
+            Vector3 groundVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
+
+            Debug.DrawRay(transform.position, groundVelocityWS * 2f, Color.yellow);
+            Debug.DrawRay(transform.position, groundNormal * 5f, IsGrounded ? Color.cyan : Color.blue);
+            groundedMarker.SetActive(IsGrounded);
+
+            if (IsGrounded)
             {
-                velocity = desiredGroundVelocity;
+                velocity = groundVelocityWS;
+            }
+            else if (inAirAcceleration > 0f)
+            {
+                ApplyInAirMovement(camForward);
             }
 
             UpdateDash();
             UpdateStamina();
 
-            // CHALLENGE! Allow some lateral movement when in air, but preserve momentum
-
             if (jumpRequested)
             {
-                velocity.y += Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+                velocity.y = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
                 jumpRequested = false;
+                secondJumpEnabled = !secondJumpEnabled;
             }
             else
             {
-                velocity.y += Physics.gravity.y * Time.deltaTime;
+                float g = Physics.gravity.y * Time.deltaTime;
+                if (IsGrounded)
+                {
+                    secondJumpEnabled = false;
+                    // Extra gravity feels better when going down slopes (less bouncing).
+                    // It also contributes to better jumping by keeping the capsule grounded a bit longer.
+                    // In real life, our back foot is still on ground when our body is just past the edge.
+                    // Some game developers call this moment "coyote time".
+                    g *= gravityScalarWhenOnGround;
+                }
+                velocity.y += g;
             }
 
-            TurnTowards(desiredGroundVelocity);
+            TurnTowards(groundVelocityWS);
             collisionFlags = body.Move(velocity * Time.deltaTime);
+        }
+
+        private void ApplyInAirMovement(Vector2 camForward)
+        {
+            // Allow some lateral movement when in air
+            // Preserve momentum and enfore speed limits
+            Quaternion localToWorld = Quaternion.LookRotation(camForward.ToVector3());
+            Vector3 moveDirectionWS = localToWorld * input_move.ToVector3();
+            Vector2 lateralAccelerationWS = moveDirectionWS.ToVector2() * inAirAcceleration;
+            Vector2 lateralVelocityWS = velocity.ToVector2();
+            lateralVelocityWS += lateralAccelerationWS * Time.deltaTime;
+            lateralVelocityWS = Vector2.ClampMagnitude(lateralVelocityWS, runSpeed * (IsDashActive ? dashSpeedMultiplier : 1f));
+            velocity.x = lateralVelocityWS.x;
+            velocity.z = lateralVelocityWS.y;
+        }
+
+        private Vector3 ComputeGroundNormal()
+        {
+            if (!computeGroundNormal) return Vector3.up;
+            IsGrounded = Physics.SphereCast(
+                transform.position + Vector3.up * body.radius,
+                body.radius, Vector3.down,
+                out RaycastHit hitInfo,
+                maxDistance: body.skinWidth * 2f,
+                groundLayers,
+                QueryTriggerInteraction.Ignore);
+            return IsGrounded ? hitInfo.normal : Vector3.up;
         }
 
         private void UpdateDash()

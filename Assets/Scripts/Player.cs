@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -8,6 +9,15 @@ namespace GameU
     {
         [SerializeField, Range(0f, 10f), Tooltip("Maximum speed when running")]
         float runSpeed = 4f;
+
+        [SerializeField, Range(0f, 3f), Tooltip("Maximum jump height when doing a normal jump action")]
+        float normalJumpHeight = 1f;
+
+        //[SerializeField, Range(0f, 3f), Tooltip("Additional jump height when doing a high jump action")]
+        //float extraJumpHeight = 1f;
+
+        [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
+        float turnSpeed = 360f;
 
         [SerializeField, Range(1f, 5f)]
         float dashSpeedMultiplier = 3f;
@@ -23,18 +33,9 @@ namespace GameU
 
         [SerializeField, Range(0f, 1f)]
         float staminaPerDash = 0.2f;
-        
+
         [SerializeField, Range(0f, 1f), Tooltip("Stamina per second")]
         float staminaRecoveryRate = 0.1f;
-
-        [SerializeField, Range(0f, 3f), Tooltip("Maximum jump height when doing a normal jump action")]
-        float normalJumpHeight = 1f;
-
-        //[SerializeField, Range(0f, 3f), Tooltip("Additional jump height when doing a high jump action")]
-        //float extraJumpHeight = 1f;
-
-        [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
-        float turnSpeed = 360f;
 
         [SerializeField]
         LayerMask groundLayers;
@@ -73,13 +74,6 @@ namespace GameU
             body.minMoveDistance = 0f; // force this to zero to ensure movement with small deltaTime (i.e., during high frame rate)
             controls = new PlayerControls();
             dash = new Countdown(dashDuration, dashCooldown);
-            //dash.OnElapsed += Dash_OnElapsed;
-        }
-
-        private void Dash_OnElapsed()
-        {
-            velocity.x = 0f;
-            velocity.z = 0f;
         }
 
         private void Start()
@@ -102,6 +96,22 @@ namespace GameU
             controls.Disable();
             controls.gameplay.RemoveCallbacks(this);
         }
+
+        #region MovingPlatform support
+        private MovingPlatform activePlatform;
+        public Vector3 PlatformVelocity => (activePlatform != null) ? activePlatform.Body.velocity : Vector3.zero;
+
+        private void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            var platform = hit.collider.GetComponentInParent<MovingPlatform>();
+            if (platform != null)
+            {
+                activePlatform = platform;
+            }
+        }
+        #endregion
+
+        #region Input callbacks
 
         /// <summary>
         /// Invoked only when the Move context changes
@@ -142,6 +152,13 @@ namespace GameU
             }
         }
 
+        public void OnExit(InputAction.CallbackContext context)
+        {
+            Application.Quit();
+        }
+
+        #endregion
+
         private void Update()
         {
             IsGrounded = body.isGrounded;
@@ -152,8 +169,8 @@ namespace GameU
             Quaternion localToGround = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
             Vector3 groundVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
 
-            Debug.DrawRay(transform.position, groundVelocityWS * 2f, Color.yellow);
-            Debug.DrawRay(transform.position, groundNormal * 5f, IsGrounded ? Color.cyan : Color.blue);
+            Debug.DrawRay(transform.position, groundVelocityWS, Color.white);
+            Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
             groundedMarker.SetActive(IsGrounded);
 
             if (IsGrounded)
@@ -189,8 +206,20 @@ namespace GameU
                 velocity.y += g;
             }
 
+            if (IsGrounded)
+            {
+                velocity += PlatformVelocity;
+            }
+
             TurnTowards(groundVelocityWS);
+            activePlatform = null;
             collisionFlags = body.Move(velocity * Time.deltaTime);
+
+            // Follow elevators up & down in order to stay grounded and not jitter
+            float v = PlatformVelocity.y * Time.deltaTime;
+            body.transform.Translate(Vector3.up * v, Space.World);
+
+            Debug.DrawRay(transform.position, velocity * 2f, Color.yellow);
         }
 
         private void ApplyInAirMovement(Vector2 camForward)
@@ -263,11 +292,6 @@ namespace GameU
                 pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
                 transform.eulerAngles = pitchYawRoll;
             }
-        }
-
-        public void OnExit(InputAction.CallbackContext context)
-        {
-            Application.Quit();
         }
     }
 }

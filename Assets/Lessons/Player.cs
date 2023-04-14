@@ -1,7 +1,9 @@
+using UnityEditor.ShaderGraph;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [SelectionBase, RequireComponent(typeof(CharacterController))]
-public class Player : MonoBehaviour
+public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 {
     [SerializeField, Range(0f, 10f), Tooltip("Maximum speed when running")]
     float runSpeed = 4f;
@@ -16,10 +18,20 @@ public class Player : MonoBehaviour
     private Vector3 velocity;
     private bool jumpRequested;
     private Camera cam;
+    private PlayerControls_Lesson controls;
+
+    public void OnJump(InputAction.CallbackContext context)
+    {
+        if (context.ReadValueAsButton() && !jumpRequested)
+        {
+            jumpRequested = body.isGrounded;
+        }
+    }
 
     private void Awake()
     {
         body = GetComponent<CharacterController>();
+        controls = new PlayerControls_Lesson();
     }
 
     private void Start()
@@ -28,9 +40,31 @@ public class Player : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
     }
 
+    private void OnEnable()
+    {
+        controls.gameplay.SetCallbacks(this);
+        controls.Enable();
+    }
+
+    private void OnDisable()
+    {
+        // TODO - fix errors next time
+        controls.gameplay.RemoveCallbacks(this);
+        controls.Disable();
+    }
+
     private void Update()
     {
-        // TODO - Lesson 2 - add Jump action
+        if (jumpRequested)
+        {
+            velocity.y = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+            jumpRequested = false;
+        }
+        else
+        {
+            float g = Physics.gravity.y * Time.deltaTime;
+            velocity.y += g;
+        }
 
         // TODO - Lesson 2 - add Move action
 

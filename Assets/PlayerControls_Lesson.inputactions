@@ -1,0 +1,46 @@
+{
+    "name": "PlayerControls_Lesson",
+    "maps": [
+        {
+            "name": "gameplay",
+            "id": "bcc01cc6-44b6-46ac-8df5-8c86ba1d7c67",
+            "actions": [
+                {
+                    "name": "jump",
+                    "type": "Button",
+                    "id": "3a65cc9e-7803-46a8-a8f6-388f9f8857df",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "9e9a2e05-12ab-4c4f-884c-b136d76e0f30",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Standard",
+                    "action": "jump",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": [
+        {
+            "name": "Standard",
+            "bindingGroup": "Standard",
+            "devices": [
+                {
+                    "devicePath": "<Keyboard>",
+                    "isOptional": false,
+                    "isOR": false
+                }
+            ]
+        }
+    ]
+}

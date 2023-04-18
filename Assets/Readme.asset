@@ -23,4 +23,8 @@ MonoBehaviour:
     text: Input System, action maps, actions, and bindings.
     linkText:
     url:
+  - heading: Lesson 3
+    text: Adding gravity and the "jump" action.
+    linkText:
+    url:
   loadedLayout: 1

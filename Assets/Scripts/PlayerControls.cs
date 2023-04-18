@@ -73,6 +73,24 @@ namespace GameU
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""interact"",
+                    ""type"": ""Button"",
+                    ""id"": ""e557f939-49e1-44f0-9f06-536e41391fdb"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""dolly"",
+                    ""type"": ""Value"",
+                    ""id"": ""5151d591-af68-47ca-ad15-28eef2a4d1ea"",
+                    ""expectedControlType"": ""Axis"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -218,6 +236,50 @@ namespace GameU
                     ""action"": ""exit"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""12642003-924a-41b3-8a5f-ec3f9e2137b8"",
+                    ""path"": ""<Gamepad>/buttonNorth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""DefaultControls"",
+                    ""action"": ""interact"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""fed1e60f-70ea-45bb-8cd3-54088a315a72"",
+                    ""path"": ""<Mouse>/rightButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""interact"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""294df686-fc49-4f32-9f8d-8ec5f6ff8047"",
+                    ""path"": ""<Gamepad>/rightStick/y"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""DefaultControls"",
+                    ""action"": ""dolly"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""e9ee70b8-f77d-4610-bb44-e912bf38b539"",
+                    ""path"": ""<Mouse>/scroll/y"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""DefaultControls"",
+                    ""action"": ""dolly"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -237,6 +299,8 @@ namespace GameU
             m_gameplay_look = m_gameplay.FindAction("look", throwIfNotFound: true);
             m_gameplay_dash = m_gameplay.FindAction("dash", throwIfNotFound: true);
             m_gameplay_exit = m_gameplay.FindAction("exit", throwIfNotFound: true);
+            m_gameplay_interact = m_gameplay.FindAction("interact", throwIfNotFound: true);
+            m_gameplay_dolly = m_gameplay.FindAction("dolly", throwIfNotFound: true);
         }
 
         public void Dispose()
@@ -303,6 +367,8 @@ namespace GameU
         private readonly InputAction m_gameplay_look;
         private readonly InputAction m_gameplay_dash;
         private readonly InputAction m_gameplay_exit;
+        private readonly InputAction m_gameplay_interact;
+        private readonly InputAction m_gameplay_dolly;
         public struct GameplayActions
         {
             private @PlayerControls m_Wrapper;
@@ -312,6 +378,8 @@ namespace GameU
             public InputAction @look => m_Wrapper.m_gameplay_look;
             public InputAction @dash => m_Wrapper.m_gameplay_dash;
             public InputAction @exit => m_Wrapper.m_gameplay_exit;
+            public InputAction @interact => m_Wrapper.m_gameplay_interact;
+            public InputAction @dolly => m_Wrapper.m_gameplay_dolly;
             public InputActionMap Get() { return m_Wrapper.m_gameplay; }
             public void Enable() { Get().Enable(); }
             public void Disable() { Get().Disable(); }
@@ -336,6 +404,12 @@ namespace GameU
                 @exit.started += instance.OnExit;
                 @exit.performed += instance.OnExit;
                 @exit.canceled += instance.OnExit;
+                @interact.started += instance.OnInteract;
+                @interact.performed += instance.OnInteract;
+                @interact.canceled += instance.OnInteract;
+                @dolly.started += instance.OnDolly;
+                @dolly.performed += instance.OnDolly;
+                @dolly.canceled += instance.OnDolly;
             }
 
             private void UnregisterCallbacks(IGameplayActions instance)
@@ -355,6 +429,12 @@ namespace GameU
                 @exit.started -= instance.OnExit;
                 @exit.performed -= instance.OnExit;
                 @exit.canceled -= instance.OnExit;
+                @interact.started -= instance.OnInteract;
+                @interact.performed -= instance.OnInteract;
+                @interact.canceled -= instance.OnInteract;
+                @dolly.started -= instance.OnDolly;
+                @dolly.performed -= instance.OnDolly;
+                @dolly.canceled -= instance.OnDolly;
             }
 
             public void RemoveCallbacks(IGameplayActions instance)
@@ -388,6 +468,8 @@ namespace GameU
             void OnLook(InputAction.CallbackContext context);
             void OnDash(InputAction.CallbackContext context);
             void OnExit(InputAction.CallbackContext context);
+            void OnInteract(InputAction.CallbackContext context);
+            void OnDolly(InputAction.CallbackContext context);
         }
     }
 }

@@ -9,7 +9,8 @@ namespace GameU
         private void Awake()
         {
             Body = GetComponent<Rigidbody>();
-            Body.interpolation = RigidbodyInterpolation.Interpolate; // IMPORTANT to reduce jitter of Player
         }
+
+        public Vector3 Velocity => Body.velocity;
     }
 }

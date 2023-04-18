@@ -69,6 +69,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   runSpeed: 4
   normalJumpHeight: 1
+  isDoubleJumpEnabled: 1
   turnSpeed: 720
   dashSpeedMultiplier: 4
   dashDuration: 0.25
@@ -80,7 +81,8 @@ MonoBehaviour:
     m_Bits: 1
   gravityScalarWhenOnGround: 30
   inAirAcceleration: 20
-  computeGroundNormal: 0
+  computeGroundNormal: 1
+  followElevators: 1
   groundedMarker: {fileID: 2492631105298994166}
 --- !u!1 &2492631105298994166
 GameObject:

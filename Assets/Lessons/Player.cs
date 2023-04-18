@@ -1,4 +1,3 @@
-using UnityEditor.ShaderGraph;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -22,7 +21,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
     public void OnJump(InputAction.CallbackContext context)
     {
-        if (context.ReadValueAsButton() && !jumpRequested)
+        if (context.ReadValueAsButton() && !jumpRequested) // Should this be simplified and ignore current jumpRequested state?
         {
             jumpRequested = body.isGrounded;
         }

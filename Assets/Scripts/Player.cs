@@ -1,6 +1,7 @@
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+using Cinemachine;
 
 namespace GameU
 {
@@ -15,6 +16,9 @@ namespace GameU
 
         //[SerializeField, Range(0f, 3f), Tooltip("Additional jump height when doing a high jump action")]
         //float extraJumpHeight = 1f;
+
+        [SerializeField]
+        bool isDoubleJumpEnabled = true;
 
         [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
         float turnSpeed = 360f;
@@ -49,6 +53,9 @@ namespace GameU
         [SerializeField]
         bool computeGroundNormal;
 
+        [SerializeField]
+        bool followElevators = true;
+
         public GameObject groundedMarker; // HACK to see state of isGrounded
 
         public float Stamina { get; private set; } = 1f;
@@ -60,13 +67,18 @@ namespace GameU
         private PlayerControls controls;
         private CharacterController body;
         private Vector2 input_move;
+        private float input_dolly;
         private Vector3 velocity;
         private bool jumpRequested;
-        private bool secondJumpEnabled;
+        private bool isSecondJumpReady;
         private CollisionFlags collisionFlags;
-        private Camera cam;
         private Countdown dash;
         private float jumpCooldown;
+        private Camera cam;
+
+        private CinemachineOrbitalTransposer vCam_transposer;
+        private Vector3 vCam_offsetDirection;
+        private float vCam_offsetDistance;
 
         private void Awake()
         {
@@ -80,9 +92,13 @@ namespace GameU
         {
             cam = Camera.main;
             Cursor.lockState = CursorLockMode.Locked;
-            print($"FPS {Screen.currentResolution.refreshRate}");
-            QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = Screen.currentResolution.refreshRate;
+
+            // Support camera dolly
+            var vCam = FindObjectOfType<CinemachineVirtualCamera>();
+            vCam_transposer = vCam.GetCinemachineComponent<CinemachineOrbitalTransposer>();
+            vCam_offsetDirection = vCam_transposer.m_FollowOffset;
+            vCam_offsetDistance = vCam_offsetDirection.magnitude;
+            vCam_offsetDirection.Normalize();
         }
 
         private void OnEnable()
@@ -98,8 +114,9 @@ namespace GameU
         }
 
         #region MovingPlatform support
+
         private MovingPlatform activePlatform;
-        public Vector3 PlatformVelocity => (activePlatform != null) ? activePlatform.Body.velocity : Vector3.zero;
+        public Vector3 PlatformVelocity => (activePlatform != null) ? activePlatform.Velocity : Vector3.zero;
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
@@ -109,6 +126,7 @@ namespace GameU
                 activePlatform = platform;
             }
         }
+
         #endregion
 
         #region Input callbacks
@@ -131,15 +149,21 @@ namespace GameU
         /// <param name="context"></param>
         public void OnJump(InputAction.CallbackContext context)
         {
-            if (context.ReadValueAsButton() && !jumpRequested)
+            if (context.ReadValueAsButton())
             {
                 //print($"JUMP {normalJumpHeight}");
-                jumpRequested = body.isGrounded || secondJumpEnabled;
+                jumpRequested = IsGrounded || isSecondJumpReady;
             }
         }
-
+      
         public void OnLook(InputAction.CallbackContext context)
         {
+            // horizontal is used by Cinemachine to orbit camera
+        }
+
+        public void OnDolly(InputAction.CallbackContext context)
+        {
+            input_dolly = context.ReadValue<float>();
         }
 
         public void OnDash(InputAction.CallbackContext context)
@@ -150,6 +174,11 @@ namespace GameU
                 Stamina = Mathf.MoveTowards(Stamina, 0f, staminaPerDash);
                 //print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s with {Stamina:0.00} stamina remaining");
             }
+        }
+
+        public void OnInteract(InputAction.CallbackContext context)
+        {
+            // TODO
         }
 
         public void OnExit(InputAction.CallbackContext context)
@@ -167,15 +196,11 @@ namespace GameU
             Vector2 camForward = cam.transform.forward.ToVector2().normalized;
             Vector3 groundNormal = ComputeGroundNormal();
             Quaternion localToGround = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
-            Vector3 groundVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
-
-            Debug.DrawRay(transform.position, groundVelocityWS, Color.white);
-            Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
-            groundedMarker.SetActive(IsGrounded);
+            Vector3 inputVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
 
             if (IsGrounded)
             {
-                velocity = groundVelocityWS;
+                velocity = inputVelocityWS;
             }
             else if (inAirAcceleration > 0f)
             {
@@ -187,16 +212,27 @@ namespace GameU
 
             if (jumpRequested)
             {
-                velocity.y = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+                float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+                velocity.y = jumpImpulse + (IsGrounded ? velocity.y : 0f);
+                // Q: Shouldn't the jump velocity always be additive?
+                // A: No. An additive impulse makes in-air jumping ("second jump") extra powerful when
+                // quickly double-tapping the jump button. The max jump height then becomes dependent
+                // on the frame-rate, instead of just player skill/timing. By overriding the vertical
+                // velocity with the jump impulse, we ensure that max double-jump height is dependent
+                // only on the player correctly timing the jump at the apex of the grounded "first jump".
+                if (activePlatform != null)
+                {
+                    velocity += activePlatform.Velocity;
+                }
                 jumpRequested = false;
-                secondJumpEnabled = !secondJumpEnabled;
+                isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
             }
             else
             {
                 float g = Physics.gravity.y * Time.deltaTime;
                 if (IsGrounded)
                 {
-                    secondJumpEnabled = false;
+                    isSecondJumpReady = false;
                     // Extra gravity feels better when going down slopes (less bouncing).
                     // It also contributes to better jumping by keeping the capsule grounded a bit longer.
                     // In real life, our back foot is still on ground when our body is just past the edge.
@@ -206,20 +242,33 @@ namespace GameU
                 velocity.y += g;
             }
 
-            if (IsGrounded)
-            {
-                velocity += PlatformVelocity;
-            }
-
-            TurnTowards(groundVelocityWS);
-            activePlatform = null;
+            TurnTowards(inputVelocityWS);
+            activePlatform = null; // forget current active platform
             collisionFlags = body.Move(velocity * Time.deltaTime);
 
-            // Follow elevators up & down in order to stay grounded and not jitter
-            float v = PlatformVelocity.y * Time.deltaTime;
-            body.transform.Translate(Vector3.up * v, Space.World);
+            Debug.DrawRay(transform.position, velocity, Color.yellow);
+            Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
+            Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
 
-            Debug.DrawRay(transform.position, velocity * 2f, Color.yellow);
+            groundedMarker.SetActive(IsGrounded);
+
+            if (transform.position.y < -50f)
+            {
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            }
+
+            vCam_offsetDistance = Mathf.Clamp(vCam_offsetDistance - input_dolly * 10f * Time.deltaTime, 3f, 20f);
+            vCam_transposer.m_FollowOffset = vCam_offsetDirection * vCam_offsetDistance;
+        }
+
+        private void FixedUpdate()
+        {
+            // Follow elevators up & down in order to stay grounded and not jitter
+            if (followElevators && activePlatform != null)
+            {
+                Vector3 movementWS = activePlatform.Velocity * Time.deltaTime;
+                body.transform.Translate(movementWS, Space.World); // DO NOT use body.Move() here!
+            }
         }
 
         private void ApplyInAirMovement(Vector2 camForward)
@@ -239,14 +288,14 @@ namespace GameU
         private Vector3 ComputeGroundNormal()
         {
             if (!computeGroundNormal) return Vector3.up;
-            IsGrounded = Physics.SphereCast(
+            bool touching = Physics.SphereCast(
                 transform.position + Vector3.up * body.radius,
                 body.radius, Vector3.down,
                 out RaycastHit hitInfo,
-                maxDistance: body.skinWidth * 2f,
+                maxDistance: body.skinWidth * 4f,
                 groundLayers,
                 QueryTriggerInteraction.Ignore);
-            return IsGrounded ? hitInfo.normal : Vector3.up;
+            return touching ? hitInfo.normal : Vector3.up;
         }
 
         private void UpdateDash()
@@ -288,7 +337,7 @@ namespace GameU
                 float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
                 Vector3 pitchYawRoll = transform.eulerAngles;
                 float turnDelta = turnSpeed * Time.deltaTime;
-                if (!body.isGrounded) turnDelta /= 2f;
+                if (!IsGrounded) turnDelta /= 2f;
                 pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
                 transform.eulerAngles = pitchYawRoll;
             }

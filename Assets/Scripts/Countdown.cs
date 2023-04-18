@@ -9,7 +9,7 @@ public class Countdown
         Interval = interval > 0f ? interval : 0f;
         Cooldown = cooldown > 0f ? cooldown : 0f;
         AutoReset = autoReset;
-        t = interval;
+        t = -Cooldown; // ready
     }
 
     public event Action OnReset;

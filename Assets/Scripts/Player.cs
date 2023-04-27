@@ -1,7 +1,7 @@
+using Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
-using Cinemachine;
 
 namespace GameU
 {
@@ -9,7 +9,7 @@ namespace GameU
     public class Player : MonoBehaviour, PlayerControls.IGameplayActions
     {
         [SerializeField, Range(0f, 10f), Tooltip("Maximum speed when running")]
-        float runSpeed = 4f;
+        float runSpeed = 5f;
 
         [SerializeField, Range(0f, 3f), Tooltip("Maximum jump height when doing a normal jump action")]
         float normalJumpHeight = 1f;
@@ -21,10 +21,13 @@ namespace GameU
         bool isDoubleJumpEnabled = true;
 
         [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
-        float turnSpeed = 360f;
+        float turnSpeed = 720f;
+
+        [SerializeField, Range(0f, 1f)]
+        float inAirTurnSpeedRatio = 0.5f;
 
         [SerializeField, Range(1f, 5f)]
-        float dashSpeedMultiplier = 3f;
+        float dashSpeedMultiplier = 4f;
 
         [SerializeField, Range(0f, 1f)]
         float dashDuration = 0.25f;
@@ -42,13 +45,13 @@ namespace GameU
         float staminaRecoveryRate = 0.1f;
 
         [SerializeField]
-        LayerMask groundLayers;
+        LayerMask groundLayers = 1;
 
         [SerializeField, Range(1f, 50f)]
         float gravityScalarWhenOnGround = 30f;
 
         [SerializeField, Range(0f, 50f)]
-        float inAirAcceleration = 15f;
+        float inAirAcceleration = 20f;
 
         [SerializeField]
         bool computeGroundNormal;
@@ -56,13 +59,17 @@ namespace GameU
         [SerializeField]
         bool followElevators = true;
 
-        public GameObject groundedMarker; // HACK to see state of isGrounded
+        [SerializeField]
+        GameObject groundedMarker; // HACK to visualize the state of IsGrounded
 
         public float Stamina { get; private set; } = 1f;
         public bool IsGrounded { get; private set; }
         public bool IsDashReady => dash.State == Countdown.Phase.Ready && Stamina >= staminaPerDash;
         public bool IsDashActive => dash.State == Countdown.Phase.Active;
         public bool IsDashInCooldown => dash.State == Countdown.Phase.Cooling;
+        public CollisionFlags Contacts => contacts;
+
+        const float MIN_HEIGHT = -50f;
 
         private PlayerControls controls;
         private CharacterController body;
@@ -71,11 +78,10 @@ namespace GameU
         private Vector3 velocity;
         private bool jumpRequested;
         private bool isSecondJumpReady;
-        private CollisionFlags collisionFlags;
+        private CollisionFlags contacts;
+        private Vector2 dashDir;
         private Countdown dash;
-        private float jumpCooldown;
-        private Camera cam;
-
+        private CinemachineVirtualCamera vCam;
         private CinemachineOrbitalTransposer vCam_transposer;
         private Vector3 vCam_offsetDirection;
         private float vCam_offsetDistance;
@@ -85,16 +91,16 @@ namespace GameU
             body = GetComponent<CharacterController>();
             body.minMoveDistance = 0f; // force this to zero to ensure movement with small deltaTime (i.e., during high frame rate)
             controls = new PlayerControls();
+            controls.gameplay.SetCallbacks(this);
             dash = new Countdown(dashDuration, dashCooldown);
         }
 
         private void Start()
         {
-            cam = Camera.main;
+            vCam = FindObjectOfType<CinemachineVirtualCamera>();
             Cursor.lockState = CursorLockMode.Locked;
 
             // Support camera dolly
-            var vCam = FindObjectOfType<CinemachineVirtualCamera>();
             vCam_transposer = vCam.GetCinemachineComponent<CinemachineOrbitalTransposer>();
             vCam_offsetDirection = vCam_transposer.m_FollowOffset;
             vCam_offsetDistance = vCam_offsetDirection.magnitude;
@@ -103,13 +109,16 @@ namespace GameU
 
         private void OnEnable()
         {
-            controls.gameplay.SetCallbacks(this);
             controls.Enable();
         }
 
         private void OnDisable()
         {
             controls.Disable();
+        }
+
+        private void OnDestroy()
+        {
             controls.gameplay.RemoveCallbacks(this);
         }
 
@@ -132,18 +141,6 @@ namespace GameU
         #region Input callbacks
 
         /// <summary>
-        /// Invoked only when the Move context changes
-        /// </summary>
-        /// <param name="context"></param>
-        public void OnMove(InputAction.CallbackContext context)
-        {
-            input_move = context.ReadValue<Vector2>();
-            // Don't let diagonal movement be faster than orthognal movement
-            input_move = Vector2.ClampMagnitude(input_move, 1f);
-            //print($"MOVE {input_move}");
-        }
-
-        /// <summary>
         /// Invoked only when the Jump context changes
         /// </summary>
         /// <param name="context"></param>
@@ -155,10 +152,29 @@ namespace GameU
                 jumpRequested = IsGrounded || isSecondJumpReady;
             }
         }
-      
+        
+        /// <summary>
+        /// Invoked only when the Move context changes
+        /// </summary>
+        /// <param name="context"></param>
+        public void OnMove(InputAction.CallbackContext context)
+        {
+            input_move = context.ReadValue<Vector2>();
+            // IMPORTANT! Remember to use a StickDeadzone processor on the Move action.
+            // This ensures that diagonal movement is the same speed as orthognal movement,
+            // and it accounts joysticks that no longer center perfectly due to wear damage.
+            //print($"MOVE {input_move}");
+        }
+     
         public void OnLook(InputAction.CallbackContext context)
         {
-            // horizontal is used by Cinemachine to orbit camera
+            // Instead of writing our own code to orbit camera around the avatar, we will
+            // use a CinemachineVirtualCamera with an Orbital Transposer in the Body field.
+            // We also add a CinemachineInputProvider component to the virtual camera,
+            // and set the "XY Axis" field to the desired input action.
+            // NOTE: The "Control Type" of the input action must be "Vector2", even when
+            // the virtual camera is only using an Orbital Transposer. In this case, the
+            // Y-axis of the input action is ignored.
         }
 
         public void OnDolly(InputAction.CallbackContext context)
@@ -170,6 +186,7 @@ namespace GameU
         {
             if (context.ReadValueAsButton() && IsDashReady)
             {
+                dashDir = transform.forward.ToVector2().normalized;
                 dash.Reset();
                 Stamina = Mathf.MoveTowards(Stamina, 0f, staminaPerDash);
                 //print($"DASH x{dashSpeedMultiplier} for {dashDuration:0.00}s with {Stamina:0.00} stamina remaining");
@@ -193,14 +210,14 @@ namespace GameU
             IsGrounded = body.isGrounded;
 
             // Movement is relative to the camera and parallel to the ground
-            Vector2 camForward = cam.transform.forward.ToVector2().normalized;
-            Vector3 groundNormal = ComputeGroundNormal();
+            Vector2 camForward = vCam.transform.forward.ToVector2().normalized;
+            Vector3 groundNormal = computeGroundNormal ? ComputeGroundNormal() : Vector3.up;
             Quaternion localToGround = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
             Vector3 inputVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
 
             if (IsGrounded)
             {
-                velocity = inputVelocityWS;
+                velocity = inputVelocityWS; // CHALLENGE! Change this to allow momentum and friction.
             }
             else if (inAirAcceleration > 0f)
             {
@@ -242,21 +259,24 @@ namespace GameU
                 velocity.y += g;
             }
 
-            TurnTowards(inputVelocityWS);
             activePlatform = null; // forget current active platform
-            collisionFlags = body.Move(velocity * Time.deltaTime);
+            contacts = body.Move(velocity * Time.deltaTime);
 
+            TurnTowards(inputVelocityWS);
+
+            // Debug visualizations
             Debug.DrawRay(transform.position, velocity, Color.yellow);
             Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
             Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
-
             groundedMarker.SetActive(IsGrounded);
 
-            if (transform.position.y < -50f)
+            // Reload the scene when the player falls out of bounds
+            if (transform.position.y < MIN_HEIGHT)
             {
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
             }
 
+            // Apply dolly movement to the virtual camera
             vCam_offsetDistance = Mathf.Clamp(vCam_offsetDistance - input_dolly * 10f * Time.deltaTime, 3f, 20f);
             vCam_transposer.m_FollowOffset = vCam_offsetDirection * vCam_offsetDistance;
         }
@@ -271,10 +291,25 @@ namespace GameU
             }
         }
 
+        private void TurnTowards(Vector3 directionWS)
+        {
+            Vector2 direction2D = directionWS.ToVector2();
+            if (direction2D.sqrMagnitude > 0f)
+            {
+                direction2D.Normalize();
+                float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
+                Vector3 pitchYawRoll = transform.eulerAngles;
+                float turnDelta = turnSpeed * Time.deltaTime;
+                if (!IsGrounded) turnDelta *= inAirTurnSpeedRatio;
+                pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
+                transform.eulerAngles = pitchYawRoll;
+            }
+        }
+        
         private void ApplyInAirMovement(Vector2 camForward)
         {
             // Allow some lateral movement when in air
-            // Preserve momentum and enfore speed limits
+            // Preserve momentum and enforce speed limits
             Quaternion localToWorld = Quaternion.LookRotation(camForward.ToVector3());
             Vector3 moveDirectionWS = localToWorld * input_move.ToVector3();
             Vector2 lateralAccelerationWS = moveDirectionWS.ToVector2() * inAirAcceleration;
@@ -287,7 +322,6 @@ namespace GameU
 
         private Vector3 ComputeGroundNormal()
         {
-            if (!computeGroundNormal) return Vector3.up;
             bool touching = Physics.SphereCast(
                 transform.position + Vector3.up * body.radius,
                 body.radius, Vector3.down,
@@ -302,10 +336,9 @@ namespace GameU
         {
             if (IsDashActive)
             {
-                Vector2 dir = transform.forward.ToVector2().normalized;
                 float dashSpeed = runSpeed * dashSpeedMultiplier;
-                velocity.x = dir.x * dashSpeed;
-                velocity.z = dir.y * dashSpeed;
+                velocity.x = dashDir.x * dashSpeed;
+                velocity.z = dashDir.y * dashSpeed;
             }
             else
             {
@@ -328,19 +361,5 @@ namespace GameU
             Stamina = Mathf.MoveTowards(Stamina, 1f, staminaRecoveryRate * Time.deltaTime);
         }
 
-        private void TurnTowards(Vector3 direction)
-        {
-            Vector2 direction2D = direction.ToVector2();
-            if (direction2D.sqrMagnitude > 0f)
-            {
-                direction2D.Normalize();
-                float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
-                Vector3 pitchYawRoll = transform.eulerAngles;
-                float turnDelta = turnSpeed * Time.deltaTime;
-                if (!IsGrounded) turnDelta /= 2f;
-                pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
-                transform.eulerAngles = pitchYawRoll;
-            }
-        }
     }
 }

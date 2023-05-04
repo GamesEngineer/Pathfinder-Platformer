@@ -3437,11 +3437,6 @@ PrefabInstance:
       propertyPath: staminaPerAirJump
       value: 0.5
       objectReference: {fileID: 0}
-    - target: {fileID: 3844096814241327298, guid: f1677b19c5ede644f819adfa77bd7f0e,
-        type: 3}
-      propertyPath: gravityScalarWhenOnGround
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 7962577569061851021, guid: f1677b19c5ede644f819adfa77bd7f0e,
         type: 3}
       propertyPath: m_Enabled

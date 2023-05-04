@@ -15,16 +15,28 @@ MonoBehaviour:
   icon: {fileID: 2800000, guid: 727a75301c3d24613a3ebcec4a24c2c8, type: 3}
   title: Pathfinder Platformer
   sections:
-  - heading: Lesson 1
+  - heading: Lesson 1 - CharacterController
     text: Project setup and creation of player proxy. CharacterController, Camera.main, and Cursor.lockState.
     linkText: 
     url:
-  - heading: Lesson 2
+  - heading: Lesson 2 - Input System
     text: Input System, action maps, actions, and bindings.
     linkText:
     url:
-  - heading: Lesson 3
+  - heading: Lesson 3 - Jump
     text: Adding gravity and the "jump" action.
+    linkText:
+    url:
+  - heading: Lesson 4 - Move (part 1)
+    text: Added a Cinemachine Virtual Camera with an Orbital Transposer that follows the player's avatar and a Composer that looks at the avatar's head. Added absolute directional movement (it ignores the camera). 
+    linkText:
+    url:
+  - heading: Lesson 5 - Move (part 2)
+    text: Changed movement to be relative to the camera. Quaternion.LookRotation, vector extension methods, Mathf.Atan2, and Euler angles.
+    linkText:
+    url:
+  - heading: Lesson 6 - Move (part 3)
+    text: In-air movement that allows some lateral movement, while preserving momentum and enforces speed limits.
     linkText:
     url:
   loadedLayout: 1

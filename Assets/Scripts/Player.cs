@@ -23,9 +23,6 @@ namespace GameU
         [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
         float turnSpeed = 720f;
 
-        [SerializeField, Range(0f, 1f)]
-        float inAirTurnSpeedRatio = 0.5f;
-
         [SerializeField, Range(1f, 5f)]
         float dashSpeedMultiplier = 4f;
 
@@ -50,6 +47,9 @@ namespace GameU
         [SerializeField, Range(1f, 50f)]
         float gravityScalarWhenOnGround = 30f;
 
+        [SerializeField, Range(0f, 1f)]
+        float inAirTurnSpeedRatio = 0.5f;
+
         [SerializeField, Range(0f, 50f)]
         float inAirAcceleration = 20f;
 
@@ -61,6 +61,9 @@ namespace GameU
 
         [SerializeField]
         GameObject groundedMarker; // HACK to visualize the state of IsGrounded
+
+        [SerializeField]
+        GameObject bodyModel; // HACK to visualize the state of dashing
 
         public float Stamina { get; private set; } = 1f;
         public bool IsGrounded { get; private set; }
@@ -85,6 +88,8 @@ namespace GameU
         private CinemachineOrbitalTransposer vCam_transposer;
         private Vector3 vCam_offsetDirection;
         private float vCam_offsetDistance;
+        private Material bodyMaterial;
+        private Color normalColor;
 
         private void Awake()
         {
@@ -93,6 +98,8 @@ namespace GameU
             controls = new PlayerControls();
             controls.gameplay.SetCallbacks(this);
             dash = new Countdown(dashDuration, dashCooldown);
+            bodyMaterial = bodyModel.GetComponent<Renderer>().material;
+            normalColor = bodyMaterial.color;
         }
 
         private void Start()
@@ -219,7 +226,7 @@ namespace GameU
             {
                 velocity = inputVelocityWS; // CHALLENGE! Change this to allow momentum and friction.
             }
-            else if (inAirAcceleration > 0f)
+            else
             {
                 ApplyInAirMovement(camForward);
             }
@@ -269,6 +276,7 @@ namespace GameU
             Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
             Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
             groundedMarker.SetActive(IsGrounded);
+            bodyMaterial.color = IsDashActive ? Color.cyan : normalColor;
 
             // Reload the scene when the player falls out of bounds
             if (transform.position.y < MIN_HEIGHT)
@@ -293,6 +301,8 @@ namespace GameU
 
         private void TurnTowards(Vector3 directionWS)
         {
+            if (IsDashActive) return;
+
             Vector2 direction2D = directionWS.ToVector2();
             if (direction2D.sqrMagnitude > 0f)
             {
@@ -308,6 +318,8 @@ namespace GameU
         
         private void ApplyInAirMovement(Vector2 camForward)
         {
+            if (inAirAcceleration <= 0f) return;
+
             // Allow some lateral movement when in air
             // Preserve momentum and enforce speed limits
             Quaternion localToWorld = Quaternion.LookRotation(camForward.ToVector3());
@@ -315,7 +327,8 @@ namespace GameU
             Vector2 lateralAccelerationWS = moveDirectionWS.ToVector2() * inAirAcceleration;
             Vector2 lateralVelocityWS = velocity.ToVector2();
             lateralVelocityWS += lateralAccelerationWS * Time.deltaTime;
-            lateralVelocityWS = Vector2.ClampMagnitude(lateralVelocityWS, runSpeed * (IsDashActive ? dashSpeedMultiplier : 1f));
+            float maxSpeed = runSpeed * (IsDashActive ? dashSpeedMultiplier : 1f); // CHALLENGE: account for moving platforms
+            lateralVelocityWS = Vector2.ClampMagnitude(lateralVelocityWS, maxSpeed);
             velocity.x = lateralVelocityWS.x;
             velocity.z = lateralVelocityWS.y;
         }
@@ -337,27 +350,16 @@ namespace GameU
             if (IsDashActive)
             {
                 float dashSpeed = runSpeed * dashSpeedMultiplier;
+                // CHALLENGE! respect the ground normal
                 velocity.x = dashDir.x * dashSpeed;
                 velocity.z = dashDir.y * dashSpeed;
-            }
-            else
-            {
-                float speed = velocity.ToVector2().magnitude;
-                if (speed > runSpeed)
-                {
-                    // Blend back down to run speed
-                    float newSpeed = Mathf.MoveTowards(speed, runSpeed, Time.deltaTime * 30f);
-                    float ratio = newSpeed / speed;
-                    velocity.x *= ratio;
-                    velocity.z *= ratio;
-                }
-
             }
             dash.Update(Time.deltaTime);
         }
 
         private void UpdateStamina()
         {
+            if (IsDashActive) return;
             Stamina = Mathf.MoveTowards(Stamina, 1f, staminaRecoveryRate * Time.deltaTime);
         }
 

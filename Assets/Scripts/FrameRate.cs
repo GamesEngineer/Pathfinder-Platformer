@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SocialPlatforms;
 
 namespace GameU
 {
@@ -19,6 +20,9 @@ namespace GameU
 
         [SerializeField, Range(0, 100)]
         public int testDelay;
+
+        [SerializeField, Range(0.01f, 10f)]
+        float timeScale = 1f;
 
         private void Awake()
         {
@@ -48,6 +52,7 @@ namespace GameU
 
         public void Update()
         {
+            Time.timeScale = timeScale;
             if (testDelay > 0)
             {
                 System.Threading.Thread.Sleep(testDelay);

@@ -50,7 +50,7 @@ CharacterController:
   serializedVersion: 2
   m_Height: 2
   m_Radius: 0.5
-  m_SlopeLimit: 45
+  m_SlopeLimit: 70
   m_StepOffset: 0.3
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0
@@ -67,13 +67,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa5d1dc861ddcd741b709d7c3d94e33d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runSpeed: 5
+  runSpeed: 4
   normalJumpHeight: 1
   isDoubleJumpEnabled: 1
   turnSpeed: 720
-  inAirTurnSpeedRatio: 0.5
   dashSpeedMultiplier: 4
-  dashDuration: 0.25
+  dashDuration: 0.333
   dashCooldown: 0.1
   staminaPerDash: 0.2
   staminaRecoveryRate: 0.1
@@ -81,10 +80,12 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   gravityScalarWhenOnGround: 30
+  inAirTurnSpeedRatio: 0.5
   inAirAcceleration: 20
   computeGroundNormal: 0
   followElevators: 1
   groundedMarker: {fileID: 2492631105298994166}
+  bodyModel: {fileID: 7062203464807647437}
 --- !u!1 &2492631105298994166
 GameObject:
   m_ObjectHideFlags: 0

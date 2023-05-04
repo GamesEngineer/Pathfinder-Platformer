@@ -207,7 +207,7 @@ namespace GameU
                 {
                     ""name"": """",
                     ""id"": ""3c57c951-e5a9-431b-8d6b-298fa16a8656"",
-                    ""path"": ""<Keyboard>/q"",
+                    ""path"": ""<Keyboard>/leftShift"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""DefaultControls"",

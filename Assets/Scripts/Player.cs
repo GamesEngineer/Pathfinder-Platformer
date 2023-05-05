@@ -86,6 +86,7 @@ namespace GameU
         private Countdown dash;
         private CinemachineVirtualCamera vCam;
         private CinemachineOrbitalTransposer vCam_transposer;
+        private CinemachineBrain camBrain;
         private Vector3 vCam_offsetDirection;
         private float vCam_offsetDistance;
         private Material bodyMaterial;
@@ -104,6 +105,7 @@ namespace GameU
 
         private void Start()
         {
+            camBrain = FindObjectOfType<CinemachineBrain>();
             vCam = FindObjectOfType<CinemachineVirtualCamera>();
             Cursor.lockState = CursorLockMode.Locked;
 
@@ -268,6 +270,8 @@ namespace GameU
 
             activePlatform = null; // forget current active platform
             contacts = body.Move(velocity * Time.deltaTime);
+            // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
+            camBrain.m_UpdateMethod = activePlatform ? CinemachineBrain.UpdateMethod.FixedUpdate : CinemachineBrain.UpdateMethod.LateUpdate;
 
             TurnTowards(inputVelocityWS);
 

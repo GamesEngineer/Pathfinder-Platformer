@@ -39,4 +39,8 @@ MonoBehaviour:
     text: In-air movement that allows some lateral movement, while preserving momentum and enforces speed limits.
     linkText:
     url:
+  - heading: Lesson 7 - Moving Platforms (part 1)
+    text: Create an animated moving platform. Player script detects collisions with OnControllerColliderHit, and remembers when it hits a MovingPlatform. In the Player's FixedUpdate, add touchingPlatform velocity to Player. Ensure the platform uses the "animate physics" update mode.
+    linkText:
+    url:
   loadedLayout: 1

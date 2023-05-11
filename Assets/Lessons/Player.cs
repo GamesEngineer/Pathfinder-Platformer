@@ -92,9 +92,19 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             velocity.y += g;
         }
 
+        activePlatform = null; // forget current active platform
         body.Move(velocity * Time.deltaTime);
 
         TurnTowards(inputVelocityWS);
+    }
+
+    private void FixedUpdate()
+    {
+        if (activePlatform != null)
+        {
+            Vector3 movementWS = activePlatform.Velocity * Time.deltaTime;
+            body.transform.Translate(movementWS, Space.World); // DO NOT use body.Move here
+        }
     }
 
     private void TurnTowards(Vector3 directionWS)
@@ -152,6 +162,22 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     public void OnMove(InputAction.CallbackContext context)
     {
         input_move = context.ReadValue<Vector2>();
+    }
+
+    #endregion
+
+    #region Moving Platform support
+
+    private MovingPlatform activePlatform;
+
+    public Vector3 PlatformVelocity => (activePlatform != null) ? activePlatform.Velocity : Vector3.zero;
+
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        var platform = hit.collider.GetComponentInParent<MovingPlatform>();
+        if (platform == null) return;
+
+        activePlatform = platform;
     }
 
     #endregion

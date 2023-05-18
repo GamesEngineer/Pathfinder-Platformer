@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: db7bfea3208eaa0488d0b3e308aeaf75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runSpeed: 4
+  runSpeed: 5
   normalJumpHeight: 1
   turnSpeed: 720
   gravityScalarWhenOnGround: 30
@@ -1361,7 +1361,7 @@ GameObject:
   - component: {fileID: 1991728182}
   - component: {fileID: 1991728184}
   m_Layer: 0
-  m_Name: platform
+  m_Name: Platform
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

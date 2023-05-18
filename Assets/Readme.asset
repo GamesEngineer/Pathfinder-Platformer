@@ -43,4 +43,8 @@ MonoBehaviour:
     text: Create an animated moving platform. Player script detects collisions with OnControllerColliderHit, and remembers when it hits a MovingPlatform. In the Player's FixedUpdate, add touchingPlatform velocity to Player. Ensure the platform uses the "animate physics" update mode.
     linkText:
     url:
+  - heading: Lesson 8 - Moving Platforms (part 2)
+    text: Removed camera jittering when riding a platform, and added momentum when jumping from a moving platform.
+    linkText:
+    url:
   loadedLayout: 1

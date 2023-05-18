@@ -1,3 +1,4 @@
+using Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -25,6 +26,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private Vector3 velocity;
     private bool jumpRequested;
     private Camera cam; // TODO - use Cinemachine Virtual Camera, instead
+    private CinemachineBrain camBrain;
     private PlayerControls_Lesson controls;
     private Vector2 input_move;
 
@@ -38,6 +40,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private void Start()
     {
         cam = Camera.main;
+        camBrain = cam.GetComponent<CinemachineBrain>();
         Cursor.lockState = CursorLockMode.Locked;
     }
 
@@ -80,6 +83,10 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         if (jumpRequested)
         {
             velocity.y = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+            if (activePlatform != null)
+            {
+                velocity += activePlatform.Velocity;
+            }
             jumpRequested = false;
         }
         else
@@ -94,6 +101,11 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
         activePlatform = null; // forget current active platform
         body.Move(velocity * Time.deltaTime);
+
+        // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
+        camBrain.m_UpdateMethod = activePlatform ?
+            CinemachineBrain.UpdateMethod.FixedUpdate :
+            CinemachineBrain.UpdateMethod.LateUpdate;
 
         TurnTowards(inputVelocityWS);
     }
@@ -176,7 +188,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     {
         var platform = hit.collider.GetComponentInParent<MovingPlatform>();
         if (platform == null) return;
-
+        
         activePlatform = platform;
     }
 

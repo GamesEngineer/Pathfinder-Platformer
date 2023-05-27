@@ -138,6 +138,20 @@ namespace GameU
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            // LESSON 9 - Wall running & jumping
+            if (!IsGrounded &&
+                hit.gameObject.CompareTag("Wall") &&
+                velocity.y < 0f && /* ignore wall until we start falling */
+                Mathf.Abs(hit.normal.y) < maxWallSlope)
+            {
+                activeWall = hit.gameObject;
+                activeWallNormalWS = hit.normal;
+                activeWallForwardWS = Vector3.ProjectOnPlane(velocity, activeWallNormalWS); // TODO - use camera-relative input, not velocity
+                activeWallForwardWS.y = 0f;
+                activeWallForwardWS.Normalize();
+                activeWallForwardWS *= runSpeed * wallRunSpeedScalar;
+            }
+
             var platform = hit.collider.GetComponentInParent<MovingPlatform>();
             if (platform != null)
             {
@@ -145,6 +159,20 @@ namespace GameU
             }
         }
 
+        #endregion
+
+        #region Wall running & jumping
+
+        [SerializeField, Range(1e-5f, 0.5f)]
+        private float maxWallSlope = 0.1f;
+
+        [SerializeField, Range(0.5f, 5f)]
+        private float wallRunSpeedScalar = 2.0f;
+
+        private GameObject activeWall;
+        private Vector3 activeWallNormalWS;
+        private Vector3 activeWallForwardWS;
+        
         #endregion
 
         #region Input callbacks
@@ -158,7 +186,10 @@ namespace GameU
             if (context.ReadValueAsButton())
             {
                 //print($"JUMP {normalJumpHeight}");
-                jumpRequested = IsGrounded || isSecondJumpReady;
+                jumpRequested = IsGrounded;
+                jumpRequested |= isSecondJumpReady;
+                // LESSON 9 - wall jumping
+                jumpRequested |= activeWall;
             }
         }
         
@@ -223,10 +254,19 @@ namespace GameU
             Vector3 groundNormal = computeGroundNormal ? ComputeGroundNormal() : Vector3.up;
             Quaternion localToGround = Quaternion.LookRotation(camForward.ToVector3(), groundNormal);
             Vector3 inputVelocityWS = localToGround * input_move.ToVector3() * runSpeed;
+            
+            // TODO - FIXME? Should inputVelocityWS.y be set to zero?
+            //inputVelocityWS.y = 0f;
 
             if (IsGrounded)
             {
                 velocity = inputVelocityWS; // CHALLENGE! Change this to allow momentum and friction.
+            }
+            else if (activeWall)
+            {
+                velocity.x = activeWallForwardWS.x - activeWallNormalWS.x;
+                // do not touch velocity.y
+                velocity.z = activeWallForwardWS.z - activeWallNormalWS.z;
             }
             else
             {
@@ -239,17 +279,24 @@ namespace GameU
             if (jumpRequested)
             {
                 float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-                velocity.y = jumpImpulse + (IsGrounded ? velocity.y : 0f);
+                velocity.y = jumpImpulse + (IsGrounded || activeWall ? velocity.y : 0f);
                 // Q: Shouldn't the jump velocity always be additive?
                 // A: No. An additive impulse makes in-air jumping ("second jump") extra powerful when
                 // quickly double-tapping the jump button. The max jump height then becomes dependent
                 // on the frame-rate, instead of just player skill/timing. By overriding the vertical
                 // velocity with the jump impulse, we ensure that max double-jump height is dependent
                 // only on the player correctly timing the jump at the apex of the grounded "first jump".
-                if (activePlatform != null)
+                if (activePlatform)
                 {
                     velocity += activePlatform.Velocity;
                 }
+
+                // LESSON 9 - wall jumping
+                if (activeWall)
+                {
+                    velocity += activeWallNormalWS * (jumpImpulse * 2f); // push off the wall
+                }
+
                 jumpRequested = false;
                 isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
             }
@@ -265,21 +312,34 @@ namespace GameU
                     // Some game developers call this moment "coyote time".
                     g *= gravityScalarWhenOnGround;
                 }
-                velocity.y += g;
+
+                // LESSON 9 - wall running & jumping
+                bool isMoveRequested = !Mathf.Approximately(input_move.sqrMagnitude, 0f);
+                if (activeWall && isMoveRequested)
+                {
+                    velocity.y = 0f;
+                }
+                else
+                {
+                    velocity.y += g;
+                }
             }
 
             activePlatform = null; // forget current active platform
+            activeWall = null; // forget current active wall
             contacts = body.Move(velocity * Time.deltaTime);
             // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
             camBrain.m_UpdateMethod = activePlatform ? CinemachineBrain.UpdateMethod.FixedUpdate : CinemachineBrain.UpdateMethod.LateUpdate;
 
-            TurnTowards(inputVelocityWS);
+            // LESSON 9 - wall running
+            Vector3 desiredForwardWS = activeWall ? activeWallForwardWS : inputVelocityWS;
+            TurnTowards(desiredForwardWS);
 
             // Debug visualizations
             Debug.DrawRay(transform.position, velocity, Color.yellow);
             Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
             Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
-            groundedMarker.SetActive(IsGrounded);
+            groundedMarker.SetActive(IsGrounded/* || activeWall*/);
             bodyMaterial.color = IsDashActive ? Color.cyan : normalColor;
 
             // Reload the scene when the player falls out of bounds
@@ -314,7 +374,15 @@ namespace GameU
                 float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
                 Vector3 pitchYawRoll = transform.eulerAngles;
                 float turnDelta = turnSpeed * Time.deltaTime;
-                if (!IsGrounded) turnDelta *= inAirTurnSpeedRatio;
+                // LESSON 9 - wall running
+                if (activeWall)
+                {
+                    turnDelta = 1800f * Time.deltaTime;
+                }
+                else if (!IsGrounded)
+                {
+                    turnDelta *= inAirTurnSpeedRatio;
+                }
                 pitchYawRoll.y = Mathf.MoveTowardsAngle(pitchYawRoll.y, targetYaw, turnDelta);
                 transform.eulerAngles = pitchYawRoll;
             }

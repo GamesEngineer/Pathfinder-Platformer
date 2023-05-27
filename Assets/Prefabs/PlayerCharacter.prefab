@@ -67,7 +67,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa5d1dc861ddcd741b709d7c3d94e33d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runSpeed: 4
+  runSpeed: 5
   normalJumpHeight: 1
   isDoubleJumpEnabled: 1
   turnSpeed: 720
@@ -86,6 +86,8 @@ MonoBehaviour:
   followElevators: 1
   groundedMarker: {fileID: 2492631105298994166}
   bodyModel: {fileID: 7062203464807647437}
+  maxWallSlope: 0.1
+  wallRunSpeedScalar: 2
 --- !u!1 &2492631105298994166
 GameObject:
   m_ObjectHideFlags: 0

@@ -47,4 +47,8 @@ MonoBehaviour:
     text: Removed camera jittering when riding a platform, and added momentum when jumping from a moving platform.
     linkText:
     url:
+  - heading: Lesson 9 - Wall running & jumping (part 1)
+    text: Updated OnControllerColliderHit to detect collision with walls. Used Vector3.ProjectOnPlane and Vector3.Normalize to determine direction of wall run. Override character's velocity when on the wall according to the computed direction.
+    linkText:
+    url:
   loadedLayout: 1

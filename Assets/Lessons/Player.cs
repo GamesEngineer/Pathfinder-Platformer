@@ -6,19 +6,25 @@ using UnityEngine.InputSystem;
 public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 {
     [SerializeField, Range(0f, 10f), Tooltip("Maximum speed when running (meters per second)")]
-    float runSpeed = 4f;
+    private float runSpeed = 5f;
 
     [SerializeField, Range(0f, 5f), Tooltip("Normal jump height (meters above ground)")]
-    float normalJumpHeight = 1f;
+    private float normalJumpHeight = 1f;
 
     [SerializeField, Range(1f, 1800f), Tooltip("Maximum turning speed (degrees per second)")]
-    float turnSpeed = 360f;
+    private float turnSpeed = 360f;
 
     [SerializeField, Range(1f, 50f)]
     private float gravityScalarWhenOnGround = 20f;
 
     [SerializeField]
-    GameObject groundedMarker;
+    private GameObject groundedMarker;
+
+    [SerializeField, Range(1e-5f, 0.5f)]
+    private float maxWallSlope = 0.1f;
+
+    [SerializeField, Range(0.5f, 5f)]
+    private float wallRunSpeedScalar = 2.0f;
 
     public bool IsGrounded { get; private set; }
 
@@ -29,6 +35,10 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private CinemachineBrain camBrain;
     private PlayerControls_Lesson controls;
     private Vector2 input_move;
+
+    private GameObject activeWall;
+    private Vector3 activeWallNormalWS;
+    private Vector3 activeWallForwardWS;
 
     private void Awake()
     {
@@ -55,7 +65,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     }
 
     private void OnDestroy()
-    {        
+    {
         //controls.gameplay.RemoveCallbacks(this);
     }
 
@@ -75,6 +85,12 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         {
             velocity = inputVelocityWS;
         }
+        else if (activeWall)
+        {
+            velocity.x = activeWallForwardWS.x - activeWallNormalWS.x;
+            // do not touch velocity.y (allow it to jump or fall)
+            velocity.z = activeWallForwardWS.z - activeWallNormalWS.z;
+        }
         else
         {
             ApplyInAirMovement(camForward);
@@ -82,13 +98,20 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
         if (jumpRequested)
         {
-            velocity.y = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+            float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+            velocity.y = jumpImpulse;
             if (activePlatform != null)
             {
                 velocity += activePlatform.Velocity;
             }
+
+            if (activeWall)
+            {
+                velocity += activeWallNormalWS * (jumpImpulse * 2f);
+            }
+
             jumpRequested = false;
-        }
+        }        
         else
         {
             float g = Physics.gravity.y * Time.deltaTime;
@@ -96,10 +119,20 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             {
                 g *= gravityScalarWhenOnGround;
             }
-            velocity.y += g;
+
+            if (activeWall)
+            {
+                // wall running
+                velocity.y = 0f;
+            }
+            else
+            {
+                velocity.y += g;
+            }
         }
 
         activePlatform = null; // forget current active platform
+        activeWall = null; // forget the current wall
         body.Move(velocity * Time.deltaTime);
 
         // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
@@ -167,7 +200,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     {
         if (context.ReadValueAsButton() && !jumpRequested) // Should this be simplified and ignore current jumpRequested state?
         {
-            jumpRequested = body.isGrounded;
+            jumpRequested = body.isGrounded || activeWall;
         }
     }
 
@@ -187,9 +220,25 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
         var platform = hit.collider.GetComponentInParent<MovingPlatform>();
-        if (platform == null) return;
-        
-        activePlatform = platform;
+        if (platform)
+        {
+            activePlatform = platform;
+        }
+
+        if (hit.gameObject.CompareTag("Wall") &&
+            Mathf.Abs(hit.normal.y) < maxWallSlope &&
+            velocity.y < 0f &&
+            !IsGrounded)
+        {
+            activeWall = hit.gameObject;
+
+            activeWallNormalWS = hit.normal;
+
+            activeWallForwardWS = Vector3.ProjectOnPlane(velocity, activeWallNormalWS);
+            activeWallForwardWS.y = 0f;
+            activeWallForwardWS.Normalize();
+            activeWallForwardWS *= runSpeed * wallRunSpeedScalar;
+        }
     }
 
     #endregion

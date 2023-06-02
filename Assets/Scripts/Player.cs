@@ -79,7 +79,8 @@ namespace GameU
         private Vector2 input_move;
         private float input_dolly;
         private Vector3 velocity;
-        private bool jumpRequested;
+        private bool jumpTriggered;
+        private bool jumpButton;
         private bool isSecondJumpReady;
         private CollisionFlags contacts;
         private Vector2 dashDir;
@@ -142,8 +143,10 @@ namespace GameU
             if (!IsGrounded &&
                 hit.gameObject.CompareTag("Wall") &&
                 velocity.y < 0f && /* ignore wall until we start falling */
-                Mathf.Abs(hit.normal.y) < maxWallSlope)
+                Mathf.Abs(hit.normal.y) < maxWallSlope &&
+                wallRunState != WallRunStates.Jumping && jumpButton)
             {
+                wallRunState = WallRunStates.Running;
                 activeWall = hit.gameObject;
                 activeWallNormalWS = hit.normal;
                 activeWallForwardWS = Vector3.ProjectOnPlane(velocity, activeWallNormalWS); // TODO - use camera-relative input, not velocity
@@ -172,7 +175,9 @@ namespace GameU
         private GameObject activeWall;
         private Vector3 activeWallNormalWS;
         private Vector3 activeWallForwardWS;
-        
+        private enum WallRunStates { Ready, Running, Jumping }
+        private WallRunStates wallRunState;
+
         #endregion
 
         #region Input callbacks
@@ -183,14 +188,8 @@ namespace GameU
         /// <param name="context"></param>
         public void OnJump(InputAction.CallbackContext context)
         {
-            if (context.ReadValueAsButton())
-            {
-                //print($"JUMP {normalJumpHeight}");
-                jumpRequested = IsGrounded;
-                jumpRequested |= isSecondJumpReady;
-                // LESSON 9 - wall jumping
-                jumpRequested |= activeWall;
-            }
+            jumpTriggered |= context.started;
+            jumpButton = context.performed;
         }
         
         /// <summary>
@@ -261,6 +260,7 @@ namespace GameU
             if (IsGrounded)
             {
                 velocity = inputVelocityWS; // CHALLENGE! Change this to allow momentum and friction.
+                wallRunState = WallRunStates.Ready;
             }
             else if (activeWall)
             {
@@ -268,7 +268,7 @@ namespace GameU
                 // do not touch velocity.y
                 velocity.z = activeWallForwardWS.z - activeWallNormalWS.z;
             }
-            else
+            else if (wallRunState != WallRunStates.Jumping)
             {
                 ApplyInAirMovement(camForward);
             }
@@ -276,10 +276,10 @@ namespace GameU
             UpdateDash();
             UpdateStamina();
 
-            if (jumpRequested)
+            float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+            if (body.isGrounded && jumpTriggered)
             {
-                float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-                velocity.y = jumpImpulse + (IsGrounded || activeWall ? velocity.y : 0f);
+                velocity.y = jumpImpulse;
                 // Q: Shouldn't the jump velocity always be additive?
                 // A: No. An additive impulse makes in-air jumping ("second jump") extra powerful when
                 // quickly double-tapping the jump button. The max jump height then becomes dependent
@@ -290,14 +290,11 @@ namespace GameU
                 {
                     velocity += activePlatform.Velocity;
                 }
-
-                // LESSON 9 - wall jumping
-                if (activeWall)
-                {
-                    velocity += activeWallNormalWS * (jumpImpulse * 2f); // push off the wall
-                }
-
-                jumpRequested = false;
+            }
+            else if (activeWall && !jumpButton)
+            {
+                velocity.y = jumpImpulse;
+                velocity += activeWallNormalWS * (jumpImpulse * 5f); // push off the wall
                 isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
             }
             else
@@ -315,7 +312,7 @@ namespace GameU
 
                 // LESSON 9 - wall running & jumping
                 bool isMoveRequested = !Mathf.Approximately(input_move.sqrMagnitude, 0f);
-                if (activeWall && isMoveRequested)
+                if (activeWall && jumpButton)
                 {
                     velocity.y = 0f;
                 }
@@ -324,10 +321,12 @@ namespace GameU
                     velocity.y += g;
                 }
             }
+            jumpTriggered = false;
 
             activePlatform = null; // forget current active platform
             activeWall = null; // forget current active wall
             contacts = body.Move(velocity * Time.deltaTime);
+            
             // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
             camBrain.m_UpdateMethod = activePlatform ? CinemachineBrain.UpdateMethod.FixedUpdate : CinemachineBrain.UpdateMethod.LateUpdate;
 
@@ -339,7 +338,7 @@ namespace GameU
             Debug.DrawRay(transform.position, velocity, Color.yellow);
             Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
             Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
-            groundedMarker.SetActive(IsGrounded/* || activeWall*/);
+            groundedMarker.SetActive(IsGrounded || activeWall);
             bodyMaterial.color = IsDashActive ? Color.cyan : normalColor;
 
             // Reload the scene when the player falls out of bounds

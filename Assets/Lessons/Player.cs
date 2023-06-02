@@ -31,6 +31,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private CharacterController body;
     private Vector3 velocity;
     private bool jumpRequested;
+    private bool jumpStarted;
     private Camera cam; // TODO - use Cinemachine Virtual Camera, instead
     private CinemachineBrain camBrain;
     private PlayerControls_Lesson controls;
@@ -85,7 +86,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         {
             velocity = inputVelocityWS;
         }
-        else if (activeWall)
+        else if (activeWall && jumpStarted)
         {
             velocity.x = activeWallForwardWS.x - activeWallNormalWS.x;
             // do not touch velocity.y (allow it to jump or fall)
@@ -96,22 +97,20 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             ApplyInAirMovement(camForward);
         }
 
-        if (jumpRequested)
+        float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
+        if (jumpStarted && body.isGrounded)
         {
-            float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
             velocity.y = jumpImpulse;
-            if (activePlatform != null)
+            if (activePlatform)
             {
                 velocity += activePlatform.Velocity;
             }
-
-            if (activeWall)
-            {
-                velocity += activeWallNormalWS * (jumpImpulse * 2f);
-            }
-
-            jumpRequested = false;
-        }        
+        }
+        else if (jumpRequested && activeWall)
+        {
+            velocity.y = jumpImpulse;
+            velocity += activeWallNormalWS * (jumpImpulse * 2f);
+        }
         else
         {
             float g = Physics.gravity.y * Time.deltaTime;
@@ -120,7 +119,9 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
                 g *= gravityScalarWhenOnGround;
             }
 
-            if (activeWall)
+            //bool isMoveRequested = ! Mathf.Approximately(input_move.sqrMagnitude, 0f);
+            //if (activeWall && isMoveRequested && jumpStarted)
+            if (activeWall && jumpStarted)
             {
                 // wall running
                 velocity.y = 0f;
@@ -140,12 +141,15 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             CinemachineBrain.UpdateMethod.FixedUpdate :
             CinemachineBrain.UpdateMethod.LateUpdate;
 
+        // TODO - turn towards wallForward when wall running
         TurnTowards(inputVelocityWS);
+
+        jumpRequested = false;
     }
 
     private void FixedUpdate()
     {
-        if (activePlatform != null)
+        if (activePlatform)
         {
             Vector3 movementWS = activePlatform.Velocity * Time.deltaTime;
             body.transform.Translate(movementWS, Space.World); // DO NOT use body.Move here
@@ -198,10 +202,8 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
     public void OnJump(InputAction.CallbackContext context)
     {
-        if (context.ReadValueAsButton() && !jumpRequested) // Should this be simplified and ignore current jumpRequested state?
-        {
-            jumpRequested = body.isGrounded || activeWall;
-        }
+        jumpStarted = context.performed;
+        jumpRequested = context.canceled;
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -220,7 +222,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
         var platform = hit.collider.GetComponentInParent<MovingPlatform>();
-        if (platform)
+        if (platform && hit.normal.y > 0.5f)
         {
             activePlatform = platform;
         }
@@ -239,6 +241,11 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             activeWallForwardWS.Normalize();
             activeWallForwardWS *= runSpeed * wallRunSpeedScalar;
         }
+    }
+
+    public void OnLook(InputAction.CallbackContext context)
+    {
+        // Handled by CinemachineInputProvider
     }
 
     #endregion

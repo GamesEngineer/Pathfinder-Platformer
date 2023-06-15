@@ -142,9 +142,10 @@ namespace GameU
             // LESSON 9 - Wall running & jumping
             if (!IsGrounded &&
                 hit.gameObject.CompareTag("Wall") &&
-                velocity.y < 0f && /* ignore wall until we start falling */
+                velocity.y <= 0f && /* ignore wall until we start falling */
                 Mathf.Abs(hit.normal.y) < maxWallSlope &&
-                wallRunState != WallRunStates.Jumping && jumpButton)
+                wallRunState != WallRunStates.Jumping &&
+                jumpButton)
             {
                 wallRunState = WallRunStates.Running;
                 activeWall = hit.gameObject;
@@ -277,7 +278,7 @@ namespace GameU
             UpdateStamina();
 
             float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-            if (body.isGrounded && jumpTriggered)
+            if ((body.isGrounded || isSecondJumpReady) && jumpTriggered)
             {
                 velocity.y = jumpImpulse;
                 // Q: Shouldn't the jump velocity always be additive?
@@ -290,12 +291,14 @@ namespace GameU
                 {
                     velocity += activePlatform.Velocity;
                 }
+                isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
             }
             else if (activeWall && !jumpButton)
             {
                 velocity.y = jumpImpulse;
                 velocity += activeWallNormalWS * (jumpImpulse * 5f); // push off the wall
-                isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
+                //wallRunState = WallRunStates.Jumping; 
+                isSecondJumpReady = isDoubleJumpEnabled;
             }
             else
             {
@@ -311,21 +314,24 @@ namespace GameU
                 }
 
                 // LESSON 9 - wall running & jumping
-                bool isMoveRequested = !Mathf.Approximately(input_move.sqrMagnitude, 0f);
                 if (activeWall && jumpButton)
                 {
-                    velocity.y = 0f;
+                    velocity.y = 0f; // Stick to the wall; don't fall
                 }
                 else
                 {
-                    velocity.y += g;
+                    velocity.y += g; // Fall with gravity
                 }
             }
             jumpTriggered = false;
 
             activePlatform = null; // forget current active platform
-            activeWall = null; // forget current active wall
+            //activeWall = null; // forget current active wall
             contacts = body.Move(velocity * Time.deltaTime);
+            if (contacts.HasFlag(CollisionFlags.Sides) == false)
+            {
+                activeWall = null; // forget current active wall
+            }
             
             // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
             camBrain.m_UpdateMethod = activePlatform ? CinemachineBrain.UpdateMethod.FixedUpdate : CinemachineBrain.UpdateMethod.LateUpdate;

@@ -119,30 +119,33 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
                 g *= gravityScalarWhenOnGround;
             }
 
-            //bool isMoveRequested = ! Mathf.Approximately(input_move.sqrMagnitude, 0f);
-            //if (activeWall && isMoveRequested && jumpStarted)
             if (activeWall && jumpStarted)
             {
-                // wall running
+                // Wall running
                 velocity.y = 0f;
             }
             else
             {
+                // Falling
                 velocity.y += g;
             }
         }
 
         activePlatform = null; // forget current active platform
-        activeWall = null; // forget the current wall
-        body.Move(velocity * Time.deltaTime);
+        CollisionFlags contacts = body.Move(velocity * Time.deltaTime);
+        if (!contacts.HasFlag(CollisionFlags.Sides))
+        {
+            activeWall = null; // forget the current wall
+        }
 
         // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
         camBrain.m_UpdateMethod = activePlatform ?
             CinemachineBrain.UpdateMethod.FixedUpdate :
             CinemachineBrain.UpdateMethod.LateUpdate;
 
-        // TODO - turn towards wallForward when wall running
-        TurnTowards(inputVelocityWS);
+        // Turn towards wallForward when wall running
+        Vector3 desiredForwardWS = activeWall ? activeWallForwardWS : inputVelocityWS;
+        TurnTowards(desiredForwardWS);
 
         jumpRequested = false;
     }
@@ -229,7 +232,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
         if (hit.gameObject.CompareTag("Wall") &&
             Mathf.Abs(hit.normal.y) < maxWallSlope &&
-            velocity.y < 0f &&
+            velocity.y <= 0f &&
             !IsGrounded)
         {
             activeWall = hit.gameObject;

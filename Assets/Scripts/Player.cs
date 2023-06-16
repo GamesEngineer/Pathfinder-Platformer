@@ -66,7 +66,9 @@ namespace GameU
         GameObject bodyModel; // HACK to visualize the state of dashing
 
         public float Stamina { get; private set; } = 1f;
-        public bool IsGrounded { get; private set; }
+        public bool IsGrounded => state == State.Grounded;
+        public bool IsWallRunning => state == State.WallRun;
+        public bool IsSecondJumpReady => state == State.FirstJump || state == State.WallJump;
         public bool IsDashReady => dash.State == Countdown.Phase.Ready && Stamina >= staminaPerDash;
         public bool IsDashActive => dash.State == Countdown.Phase.Active;
         public bool IsDashInCooldown => dash.State == Countdown.Phase.Cooling;
@@ -74,14 +76,26 @@ namespace GameU
 
         const float MIN_HEIGHT = -50f;
 
+        public enum State
+        {
+            Grounded,
+            FirstJump,
+            WallRun,
+            WallJump,
+            SecondJump,
+            Falling,
+        }
+        private State state = State.Falling;
+
         private PlayerControls controls;
         private CharacterController body;
         private Vector2 input_move;
         private float input_dolly;
         private Vector3 velocity;
-        private bool jumpTriggered;
-        private bool jumpButton;
-        private bool isSecondJumpReady;
+        private bool jumpStarted;
+        private bool jumpHeld;
+        private bool jumpReleased;
+        
         private CollisionFlags contacts;
         private Vector2 dashDir;
         private Countdown dash;
@@ -139,15 +153,11 @@ namespace GameU
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
-            // LESSON 9 - Wall running & jumping
-            if (!IsGrounded &&
+            if (!IsGrounded && jumpHeld &&
                 hit.gameObject.CompareTag("Wall") &&
                 velocity.y <= 0f && /* ignore wall until we start falling */
-                Mathf.Abs(hit.normal.y) < maxWallSlope &&
-                wallRunState != WallRunStates.Jumping &&
-                jumpButton)
+                Mathf.Abs(hit.normal.y) < maxWallSlope)
             {
-                wallRunState = WallRunStates.Running;
                 activeWall = hit.gameObject;
                 activeWallNormalWS = hit.normal;
                 activeWallForwardWS = Vector3.ProjectOnPlane(velocity, activeWallNormalWS); // TODO - use camera-relative input, not velocity
@@ -176,8 +186,6 @@ namespace GameU
         private GameObject activeWall;
         private Vector3 activeWallNormalWS;
         private Vector3 activeWallForwardWS;
-        private enum WallRunStates { Ready, Running, Jumping }
-        private WallRunStates wallRunState;
 
         #endregion
 
@@ -189,8 +197,9 @@ namespace GameU
         /// <param name="context"></param>
         public void OnJump(InputAction.CallbackContext context)
         {
-            jumpTriggered |= context.started;
-            jumpButton = context.performed;
+            jumpStarted |= context.started;
+            jumpHeld = context.performed;
+            jumpReleased |= context.canceled;
         }
         
         /// <summary>
@@ -247,8 +256,6 @@ namespace GameU
 
         private void Update()
         {
-            IsGrounded = body.isGrounded;
-
             // Movement is relative to the camera and parallel to the ground
             Vector2 camForward = vCam.transform.forward.ToVector2().normalized;
             Vector3 groundNormal = computeGroundNormal ? ComputeGroundNormal() : Vector3.up;
@@ -258,18 +265,19 @@ namespace GameU
             // TODO - FIXME? Should inputVelocityWS.y be set to zero?
             //inputVelocityWS.y = 0f;
 
-            if (IsGrounded)
+            if (body.isGrounded)
             {
+                state = State.Grounded;
                 velocity = inputVelocityWS; // CHALLENGE! Change this to allow momentum and friction.
-                wallRunState = WallRunStates.Ready;
             }
             else if (activeWall)
             {
+                state = State.WallRun;
                 velocity.x = activeWallForwardWS.x - activeWallNormalWS.x;
                 // do not touch velocity.y
                 velocity.z = activeWallForwardWS.z - activeWallNormalWS.z;
             }
-            else if (wallRunState != WallRunStates.Jumping)
+            else
             {
                 ApplyInAirMovement(camForward);
             }
@@ -278,7 +286,7 @@ namespace GameU
             UpdateStamina();
 
             float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-            if ((body.isGrounded || isSecondJumpReady) && jumpTriggered)
+            if ((IsGrounded || IsSecondJumpReady) && jumpStarted)
             {
                 velocity.y = jumpImpulse;
                 // Q: Shouldn't the jump velocity always be additive?
@@ -291,21 +299,27 @@ namespace GameU
                 {
                     velocity += activePlatform.Velocity;
                 }
-                isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
+
+                if (IsSecondJumpReady && isDoubleJumpEnabled)
+                {
+                    state = State.SecondJump;
+                }
+                else
+                {
+                    state = State.FirstJump;
+                }
             }
-            else if (activeWall && !jumpButton)
-            {
+            else if (IsWallRunning && jumpReleased)
+            {                
+                state = State.WallJump;
                 velocity.y = jumpImpulse;
                 velocity += activeWallNormalWS * (jumpImpulse * 5f); // push off the wall
-                //wallRunState = WallRunStates.Jumping; 
-                isSecondJumpReady = isDoubleJumpEnabled;
             }
             else
             {
                 float g = Physics.gravity.y * Time.deltaTime;
                 if (IsGrounded)
                 {
-                    isSecondJumpReady = false;
                     // Extra gravity feels better when going down slopes (less bouncing).
                     // It also contributes to better jumping by keeping the capsule grounded a bit longer.
                     // In real life, our back foot is still on ground when our body is just past the edge.
@@ -313,8 +327,7 @@ namespace GameU
                     g *= gravityScalarWhenOnGround;
                 }
 
-                // LESSON 9 - wall running & jumping
-                if (activeWall && jumpButton)
+                if (IsWallRunning && jumpHeld)
                 {
                     velocity.y = 0f; // Stick to the wall; don't fall
                 }
@@ -323,7 +336,10 @@ namespace GameU
                     velocity.y += g; // Fall with gravity
                 }
             }
-            jumpTriggered = false;
+
+            // Reset triggers
+            jumpStarted = false;
+            jumpReleased = false;
 
             activePlatform = null; // forget current active platform
             //activeWall = null; // forget current active wall
@@ -336,15 +352,14 @@ namespace GameU
             // Animated platforms update with FixedUpdate, so change our camera's update method when we ride a platform
             camBrain.m_UpdateMethod = activePlatform ? CinemachineBrain.UpdateMethod.FixedUpdate : CinemachineBrain.UpdateMethod.LateUpdate;
 
-            // LESSON 9 - wall running
-            Vector3 desiredForwardWS = activeWall ? activeWallForwardWS : inputVelocityWS;
+            Vector3 desiredForwardWS = IsWallRunning ? activeWallForwardWS : inputVelocityWS;
             TurnTowards(desiredForwardWS);
 
             // Debug visualizations
             Debug.DrawRay(transform.position, velocity, Color.yellow);
             Debug.DrawRay(transform.position, inputVelocityWS, Color.white);
             Debug.DrawRay(transform.position, groundNormal * 3f, IsGrounded ? Color.cyan : Color.blue);
-            groundedMarker.SetActive(IsGrounded || activeWall);
+            groundedMarker.SetActive(IsGrounded || IsWallRunning);
             bodyMaterial.color = IsDashActive ? Color.cyan : normalColor;
 
             // Reload the scene when the player falls out of bounds
@@ -379,8 +394,7 @@ namespace GameU
                 float targetYaw = Mathf.Atan2(direction2D.x, direction2D.y) * Mathf.Rad2Deg;
                 Vector3 pitchYawRoll = transform.eulerAngles;
                 float turnDelta = turnSpeed * Time.deltaTime;
-                // LESSON 9 - wall running
-                if (activeWall)
+                if (IsWallRunning)
                 {
                     turnDelta = 1800f * Time.deltaTime;
                 }

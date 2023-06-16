@@ -26,12 +26,17 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     [SerializeField, Range(0.5f, 5f)]
     private float wallRunSpeedScalar = 2.0f;
 
+    [SerializeField]
+    private bool isDoubleJumpEnabled = true;
+
     public bool IsGrounded { get; private set; }
 
     private CharacterController body;
     private Vector3 velocity;
-    private bool jumpRequested;
     private bool jumpStarted;
+    private bool jumpHeld;
+    private bool jumpFinished;
+    private bool isSecondJumpReady;
     private Camera cam; // TODO - use Cinemachine Virtual Camera, instead
     private CinemachineBrain camBrain;
     private PlayerControls_Lesson controls;
@@ -40,6 +45,8 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     private GameObject activeWall;
     private Vector3 activeWallNormalWS;
     private Vector3 activeWallForwardWS;
+
+    // TODO - add state machine
 
     private void Awake()
     {
@@ -86,7 +93,7 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         {
             velocity = inputVelocityWS;
         }
-        else if (activeWall && jumpStarted)
+        else if (activeWall)
         {
             velocity.x = activeWallForwardWS.x - activeWallNormalWS.x;
             // do not touch velocity.y (allow it to jump or fall)
@@ -98,18 +105,20 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         }
 
         float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
-        if (jumpStarted && body.isGrounded)
+        if (jumpStarted && (body.isGrounded || isSecondJumpReady))
         {
             velocity.y = jumpImpulse;
             if (activePlatform)
             {
                 velocity += activePlatform.Velocity;
             }
+            isSecondJumpReady = isDoubleJumpEnabled && !isSecondJumpReady;
         }
-        else if (jumpRequested && activeWall)
+        else if (jumpFinished && activeWall)
         {
             velocity.y = jumpImpulse;
             velocity += activeWallNormalWS * (jumpImpulse * 2f);
+            isSecondJumpReady = isDoubleJumpEnabled;
         }
         else
         {
@@ -117,12 +126,14 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             if (IsGrounded)
             {
                 g *= gravityScalarWhenOnGround;
+                isSecondJumpReady = false;
             }
 
-            if (activeWall && jumpStarted)
+            if (activeWall && jumpHeld)
             {
                 // Wall running
                 velocity.y = 0f;
+                isSecondJumpReady = false;
             }
             else
             {
@@ -130,6 +141,10 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
                 velocity.y += g;
             }
         }
+
+        // Reset triggers
+        jumpStarted = false;
+        jumpFinished = false;
 
         activePlatform = null; // forget current active platform
         CollisionFlags contacts = body.Move(velocity * Time.deltaTime);
@@ -146,8 +161,6 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         // Turn towards wallForward when wall running
         Vector3 desiredForwardWS = activeWall ? activeWallForwardWS : inputVelocityWS;
         TurnTowards(desiredForwardWS);
-
-        jumpRequested = false;
     }
 
     private void FixedUpdate()
@@ -205,8 +218,11 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
 
     public void OnJump(InputAction.CallbackContext context)
     {
-        jumpStarted = context.performed;
-        jumpRequested = context.canceled;
+        jumpStarted |= context.started;
+        jumpHeld = context.performed;
+        jumpFinished |= context.canceled;
+
+        print($"jumpStarted={jumpStarted} jumpRequested={jumpHeld} jumpFinished={jumpFinished}");
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -214,9 +230,12 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         input_move = context.ReadValue<Vector2>();
     }
 
-    #endregion
+    public void OnLook(InputAction.CallbackContext context)
+    {
+        // Handled by CinemachineInputProvider
+    }
 
-    #region Moving Platform support
+    #endregion
 
     private MovingPlatform activePlatform;
 
@@ -230,10 +249,10 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             activePlatform = platform;
         }
 
-        if (hit.gameObject.CompareTag("Wall") &&
+        if (!IsGrounded && jumpHeld &&
+            hit.gameObject.CompareTag("Wall") &&
             Mathf.Abs(hit.normal.y) < maxWallSlope &&
-            velocity.y <= 0f &&
-            !IsGrounded)
+            velocity.y <= 0f)
         {
             activeWall = hit.gameObject;
 
@@ -245,11 +264,4 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             activeWallForwardWS *= runSpeed * wallRunSpeedScalar;
         }
     }
-
-    public void OnLook(InputAction.CallbackContext context)
-    {
-        // Handled by CinemachineInputProvider
-    }
-
-    #endregion
 }

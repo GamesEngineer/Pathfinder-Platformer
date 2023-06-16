@@ -1125,6 +1125,7 @@ MonoBehaviour:
   groundedMarker: {fileID: 11239562}
   maxWallSlope: 0.1
   wallRunSpeedScalar: 2
+  isDoubleJumpEnabled: 1
   inAirAcceleration: 20
   inAirTurnSpeedRatio: 0.5
 --- !u!143 &1080120051

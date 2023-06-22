@@ -38,11 +38,13 @@ public class Countdown
         t = Interval;
         OnReset?.Invoke();
     }
+
     public void Ready()
     {
         t = -Cooldown;
         OnReady?.Invoke();
     }
+
     public float Update(float decrement)
     {
         if (decrement < 0f) throw new ArgumentOutOfRangeException(nameof(decrement), $"Must be non-negative.");

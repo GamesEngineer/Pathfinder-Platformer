@@ -29,7 +29,23 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     [SerializeField]
     private bool isDoubleJumpEnabled = true;
 
+    [SerializeField, Range(1f, 5f)]
+    float dashSpeedMultiplier = 4f;
+
+    [SerializeField, Range(0f, 1f)]
+    float dashDuration = 0.25f;
+
+    [SerializeField, Range(0f, 1f)]
+    float dashCooldown = 0.1f;
+
     public bool IsGrounded { get; private set; }
+
+    public bool IsDashReady => dash.State == Countdown.Phase.Ready; // TODO - limit with stamina?
+    public bool IsDashActive => dash.State == Countdown.Phase.Active;
+
+
+    private Countdown dash;
+    private Vector2 dashDir;
 
     private CharacterController body;
     private Vector3 velocity;
@@ -53,6 +69,8 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         body = GetComponent<CharacterController>();
         controls = new PlayerControls_Lesson();
         controls.gameplay.SetCallbacks(this);
+
+        dash = new Countdown(dashDuration, dashCooldown); // TODO - hook up with input
     }
 
     private void Start()

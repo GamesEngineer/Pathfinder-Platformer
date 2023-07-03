@@ -1,4 +1,5 @@
 using Cinemachine;
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -38,14 +39,14 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
     [SerializeField, Range(0f, 1f)]
     float dashCooldown = 0.1f;
 
-    public bool IsGrounded { get; private set; }
-
     public bool IsDashReady => dash.State == Countdown.Phase.Ready; // TODO - limit with stamina?
     public bool IsDashActive => dash.State == Countdown.Phase.Active;
 
-
     private Countdown dash;
     private Vector2 dashDir;
+
+    public bool IsGrounded { get; private set; }
+    public float Stamina { get; private set; } = 1f;
 
     private CharacterController body;
     private Vector3 velocity;
@@ -122,6 +123,9 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             ApplyInAirMovement(camForward);
         }
 
+        UpdateDash();
+        UpdateStamina();
+
         float jumpImpulse = Mathf.Sqrt(-2f * Physics.gravity.y * normalJumpHeight);
         if (jumpStarted && (body.isGrounded || isSecondJumpReady))
         {
@@ -179,6 +183,23 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
         // Turn towards wallForward when wall running
         Vector3 desiredForwardWS = activeWall ? activeWallForwardWS : inputVelocityWS;
         TurnTowards(desiredForwardWS);
+    }
+
+    private void UpdateStamina()
+    {
+        // TODO - CHALLENGE! make a stamina system
+    }
+
+    private void UpdateDash()
+    {
+        if (IsDashActive)
+        {
+            float dashSpeed = runSpeed * dashSpeedMultiplier;
+            velocity.x = dashDir.x * dashSpeed;
+            velocity.z = dashDir.y * dashSpeed;
+        }
+
+        dash.Update(Time.deltaTime);
     }
 
     private void FixedUpdate()
@@ -280,6 +301,16 @@ public class Player : MonoBehaviour, PlayerControls_Lesson.IGameplayActions
             activeWallForwardWS.y = 0f;
             activeWallForwardWS.Normalize();
             activeWallForwardWS *= runSpeed * wallRunSpeedScalar;
+        }
+    }
+
+    public void OnDash(InputAction.CallbackContext context)
+    {
+        if (context.ReadValueAsButton() && IsDashReady)
+        {
+            dashDir = transform.forward.ToVector2().normalized;
+            dash.Reset();
+            // TODO - update stamina
         }
     }
 }

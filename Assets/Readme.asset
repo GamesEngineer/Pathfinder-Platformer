@@ -48,7 +48,27 @@ MonoBehaviour:
     linkText:
     url:
   - heading: Lesson 9 - Wall running & jumping (part 1)
-    text: Updated OnControllerColliderHit to detect collision with walls. Used Vector3.ProjectOnPlane and Vector3.Normalize to determine direction of wall run. Override character's velocity when on the wall according to the computed direction.
+    text: Collision detection of walls with with OnControllerColliderHit. Determine direction of wall run with Vector3.ProjectOnPlane and Vector3.Normalize. Override character's velocity when running on the wall.
+    linkText:
+    url:
+  - heading: Lesson 10 - Wall running & jumping (part 2)
+    text: Jump off wall.
+    linkText:
+    url:
+  - heading: Lesson 11 - Wall running & jumping (part 3)
+    text: Turn avatar towards direction of wall run.
+    linkText:
+    url:
+  - heading: Lesson 12 - Double jump
+    text: Tracking states for normal jump and double jump.
+    linkText:
+    url:
+  - heading: Lesson 13 - Dashing (part 1)
+    text: Add "dash" to Input Actions. CountDown helper class (includes countdown interval and cooldown interval).
+    linkText:
+    url:
+  - heading: Lesson 14 - Dashing (part 2) & final thoughts
+    text: During a dash, disable steering and override velocity.
     linkText:
     url:
   loadedLayout: 1
